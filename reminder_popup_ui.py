@@ -1,6 +1,7 @@
 import tkinter as tk
-from tkinter import ttk # ttk will be needed for styling if not using bs buttons directly
-import ttkbootstrap as bs # ttkbootstrap.Toplevel is a good base
+from tkinter import ttk
+import ttkbootstrap as bs
+from tts_manager import tts_manager # Added import
 
 class ReminderPopupUI(bs.Toplevel):
     def __init__(self, parent, task, app_callbacks):
@@ -25,13 +26,30 @@ class ReminderPopupUI(bs.Toplevel):
         # ttk style object for custom configurations if needed
         self.style = ttk.Style()
 
-        self.after_id = None # Initialize for managing the 'after' job
+        self.after_id = None
 
-        self._setup_ui() # Create UI elements first
+        self._setup_ui()
 
         # Start countdown if applicable, after UI is set up
         if self.remaining_work_seconds > 0:
             self._update_countdown()
+
+        # Announce reminder via TTS
+        try:
+            if self.task and self.task.title:
+                speech_text = f"Reminder for task: {self.task.title}"
+                tts_manager.speak(speech_text)
+            elif self.task:
+                tts_manager.speak("Reminder for task with no title.")
+                # Consider logging if a logger was passed or setup for this class
+                # print("Warning: ReminderPopupUI created for task with no title.")
+            else:
+                tts_manager.speak("Reminder triggered, but task details are unavailable.", error_context=True)
+                # print("Error: ReminderPopupUI created without a valid task object.")
+        except Exception as e:
+            # Fallback for unexpected errors during speak call initiation.
+            # tts_manager.speak() itself should handle its internal errors.
+            print(f"CRITICAL: Unexpected error initiating TTS from ReminderPopupUI: {e}")
 
 
     def _setup_ui(self):
