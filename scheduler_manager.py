@@ -129,19 +129,151 @@ def check_repeating_tasks():
     finally:
         if conn:
             conn.close()
+            logger.debug("DB connection closed after check_repeating_tasks.")
+
+
+def schedule_task_reminders(scheduler):
+    """
+    Scans tasks from the database and schedules or updates reminders.
+    Removes reminders for tasks that are completed, deleted, or no longer have a due date.
+    """
+    logger.info("Scheduler job 'schedule_task_reminders' started.")
+    conn = None
+    active_reminder_job_ids = set()
+    scheduled_count = 0
+    updated_count = 0
+
+    try:
+        conn = database_manager.create_connection()
+        if not conn:
+            logger.error("Failed to connect to the database for scheduling reminders.")
+            return
+
+        tasks = database_manager.get_all_tasks(conn)
+        if not tasks:
+            logger.info("No tasks found in the database to schedule reminders for.")
+            # Still proceed to remove old jobs if any
+
+        now = datetime.datetime.now()
+
+        for task in tasks:
+            job_id = f"reminder_{task.id}"
+
+            if not task.due_date or task.status == 'Completed':
+                # If no due date or task is completed, ensure no reminder is scheduled.
+                # Active jobs will be checked later, and this job_id won't be in active_reminder_job_ids.
+                continue
+
+            try:
+                due_datetime = datetime.datetime.fromisoformat(task.due_date)
+            except ValueError:
+                logger.error(f"Invalid due_date format for Task '{task.title}' (ID: {task.id}): {task.due_date}. Skipping reminder.")
+                continue
+
+            active_reminder_job_ids.add(job_id) # Mark this job_id as active
+
+            trigger_details = None
+            is_new_job = scheduler.get_job(job_id) is None
+
+            if not task.repetition or task.repetition.lower() == 'none': # One-time reminder
+                if due_datetime < now:
+                    logger.info(f"One-time reminder for Task '{task.title}' (ID: {task.id}) is in the past. Skipping.")
+                    active_reminder_job_ids.remove(job_id) # Don't keep it as active if it's past
+                    continue
+                trigger_details = {'trigger': 'date', 'run_date': due_datetime}
+            else: # Repeating task reminder (Daily, Weekly, Monthly, Yearly)
+                # For repeating tasks, the reminder fires at the due time on relevant days.
+                # 'start_date' ensures we don't trigger for past occurrences if scheduler was down.
+                # However, for repeating tasks, the due_datetime itself might be in the past
+                # but the repetition rule means it's still valid for future occurrences.
+                # We should ensure the first trigger is not in the past from 'now'.
+                # A common approach is to set start_date to now or slightly in future for cron.
+
+                cron_params = {'hour': due_datetime.hour, 'minute': due_datetime.minute, 'start_date': now}
+
+                if task.repetition == 'Daily':
+                    trigger_details = {'trigger': 'cron', **cron_params}
+                elif task.repetition == 'Weekly':
+                    trigger_details = {'trigger': 'cron', 'day_of_week': due_datetime.weekday(), **cron_params}
+                elif task.repetition == 'Monthly':
+                    trigger_details = {'trigger': 'cron', 'day': due_datetime.day, **cron_params}
+                elif task.repetition == 'Yearly':
+                    trigger_details = {'trigger': 'cron', 'month': due_datetime.month, 'day': due_datetime.day, **cron_params}
+                else:
+                    logger.warning(f"Unknown repetition '{task.repetition}' for Task '{task.title}' (ID: {task.id}). Skipping reminder.")
+                    active_reminder_job_ids.remove(job_id)
+                    continue
+
+            if trigger_details:
+                try:
+                    scheduler.add_job(
+                        trigger_reminder_action,
+                        args=[task.id, task.title],
+                        id=job_id,
+                        replace_existing=True,
+                        **trigger_details
+                    )
+                    if is_new_job:
+                        scheduled_count +=1
+                        logger.info(f"Scheduled reminder for Task '{task.title}' (ID: {task.id}) with trigger: {trigger_details}")
+                    else:
+                        updated_count +=1
+                        logger.info(f"Updated reminder for Task '{task.title}' (ID: {task.id}) with trigger: {trigger_details}")
+                except Exception as e_job:
+                    logger.error(f"Failed to add/update job for Task '{task.title}' (ID: {task.id}): {e_job}", exc_info=True)
+                    if job_id in active_reminder_job_ids: active_reminder_job_ids.remove(job_id)
+
+
+        # Remove stale reminder jobs
+        removed_count = 0
+        if scheduler.running: # Check if scheduler is running before getting jobs
+            existing_jobs = scheduler.get_jobs()
+            for job in existing_jobs:
+                if job.id.startswith("reminder_") and job.id not in active_reminder_job_ids:
+                    try:
+                        scheduler.remove_job(job.id)
+                        removed_count += 1
+                        logger.info(f"Removed stale reminder job: {job.id}")
+                    except Exception as e_remove:
+                         logger.error(f"Failed to remove stale job {job.id}: {e_remove}", exc_info=True)
+
+        summary_log = (f"Scheduler job 'schedule_task_reminders' completed. "
+                       f"New: {scheduled_count}, Updated: {updated_count}, Removed Stale: {removed_count}.")
+        if scheduled_count == 0 and updated_count == 0 and removed_count == 0 and tasks:
+             summary_log += " No changes to reminder schedules were needed."
+        elif not tasks and removed_count == 0 :
+             summary_log = "Scheduler job 'schedule_task_reminders' completed. No tasks found and no stale jobs to remove."
+
+        logger.info(summary_log)
+
+    except Exception as e:
+        logger.error(f"General error during 'schedule_task_reminders': {e}", exc_info=True)
+    finally:
+        if conn:
+            conn.close()
+            logger.debug("DB connection closed after schedule_task_reminders.")
+
 
 def initialize_scheduler():
-    scheduler = BackgroundScheduler(daemon=True) # daemon=True allows main app to exit even if scheduler is running
-    # Using 'interval' and 'hours=1' for testing. Consider 'cron' for more specific daily checks (e.g., at midnight)
-    scheduler.add_job(check_repeating_tasks, 'interval', hours=1)
-    # For a daily check at a specific time, e.g., 1 AM:
-    # scheduler.add_job(check_repeating_tasks, 'cron', hour=1, minute=0)
+    scheduler = BackgroundScheduler(daemon=True)
+    scheduler.add_job(check_repeating_tasks, 'interval', hours=1, id='job_check_repetition')
+
     try:
         scheduler.start()
-        logger.info("BackgroundScheduler initialized and started. Job 'check_repeating_tasks' scheduled every 1 hour.")
+        logger.info("BackgroundScheduler initialized and started.")
+
+        # Initial scan and scheduling of reminders
+        schedule_task_reminders(scheduler)
+
+        # Add a recurring job for refreshing reminders
+        scheduler.add_job(schedule_task_reminders, 'interval', minutes=15, args=[scheduler], id='job_rescheduler_reminders')
+        logger.info("Job 'check_repeating_tasks' scheduled every 1 hour. Job 'schedule_task_reminders' scheduled every 15 minutes.")
+
     except Exception as e:
-        logger.error(f"Failed to start scheduler: {e}", exc_info=True)
-        return None # Return None if scheduler fails to start
+        logger.error(f"Failed to start or fully configure scheduler: {e}", exc_info=True)
+        if scheduler.running: # If start() succeeded but a subsequent add_job failed
+            scheduler.shutdown()
+        return None
     return scheduler
 
 if __name__ == '__main__':
@@ -235,3 +367,13 @@ if __name__ == '__main__':
     #         logger.info("Shutting down scheduler from test block.")
     #         scheduler.shutdown()
     logger.info("Scheduler_manager.py direct test finished.")
+
+def trigger_reminder_action(task_id: int, task_title: str):
+    """
+    Placeholder action for when a task reminder is triggered.
+
+    Currently, this function only logs the reminder event.
+    In a full application, this could trigger a desktop notification,
+    play a sound, or update the UI.
+    """
+    logger.info(f"REMINDER TRIGGERED (placeholder): Task ID: {task_id} - Title: '{task_title}'")
