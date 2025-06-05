@@ -2,14 +2,15 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import ttkbootstrap as bs
 import datetime
+import queue # Added import
 from task_model import Task
 import database_manager as db_manager
-import scheduler_manager # Added import
-import logging # Added import
+import scheduler_manager
+import logging
+from reminder_popup_ui import ReminderPopupUI # Added import
 
-# Configure logging for main_app.
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
-logger = logging.getLogger(__name__) # Logger for main_app specific messages
+logger = logging.getLogger(__name__)
 
 class TaskManagerApp:
     def __init__(self, root_window):
@@ -21,6 +22,10 @@ class TaskManagerApp:
         self.input_widgets = {}
         self.task_tree = None
         self.save_button = None
+
+        self.reminder_queue = queue.Queue() # Create the queue
+        self.active_popups = {} # To track active popups by task_id
+
         self.scheduler = None
 
         self.priority_map_display = {1: "Low", 2: "Medium", 3: "High"}
@@ -29,7 +34,8 @@ class TaskManagerApp:
         self.refresh_task_list()
 
         try:
-            self.scheduler = scheduler_manager.initialize_scheduler()
+            # Pass the queue to the scheduler initializer
+            self.scheduler = scheduler_manager.initialize_scheduler(self.reminder_queue)
             if self.scheduler:
                 logger.info("Scheduler initialized successfully from TaskManagerApp.")
             else:
@@ -38,6 +44,7 @@ class TaskManagerApp:
             logger.error(f"Error initializing scheduler from TaskManagerApp: {e}", exc_info=True)
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self._check_reminder_queue()
 
     def _setup_ui(self):
         self.root.columnconfigure(0, weight=1)
@@ -160,6 +167,7 @@ class TaskManagerApp:
         self.task_tree.column("id", width=30, stretch=False)
         self.task_tree.heading("title", text="Title", anchor='w')
         self.task_tree.column("title", width=150, stretch=True)
+        # ... (rest of treeview column setup) ...
         self.task_tree.heading("status", text="Status", anchor='w')
         self.task_tree.column("status", width=80, stretch=False)
         self.task_tree.heading("priority", text="Priority", anchor='w')
@@ -171,6 +179,7 @@ class TaskManagerApp:
         self.task_tree.heading("creation_date", text="Created On", anchor='w')
         self.task_tree.column("creation_date", width=130, stretch=False)
 
+
         vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.task_tree.yview)
         self.task_tree.configure(yscrollcommand=vsb.set)
         vsb.grid(row=0, column=1, sticky='ns')
@@ -180,6 +189,7 @@ class TaskManagerApp:
         self.task_tree.grid(row=0, column=0, sticky='nsew')
 
     def clear_form_fields_and_reset_state(self):
+        # ... (implementation remains the same) ...
         self.input_widgets['title'].delete(0, tk.END)
         self.input_widgets['description'].delete("1.0", tk.END)
         self.input_widgets['repetition'].set('None')
@@ -197,7 +207,9 @@ class TaskManagerApp:
             self.save_button.config(text="Save Task")
         logger.info("Form fields cleared and state reset.")
 
+
     def load_selected_task_for_edit(self):
+        # ... (implementation remains the same) ...
         selected_item_iid = self.task_tree.focus()
         if not selected_item_iid:
             try:
@@ -273,6 +285,7 @@ class TaskManagerApp:
             if conn: conn.close()
 
     def save_task_action(self):
+        # ... (implementation remains largely the same, calls self.request_reschedule_reminders() at end) ...
         title_value = self.input_widgets['title'].get().strip()
         if not title_value:
             try:
@@ -344,10 +357,13 @@ class TaskManagerApp:
                 original_task_for_date = db_manager.get_task(conn, self.currently_editing_task_id)
                 updated_creation_date = original_task_for_date.creation_date if original_task_for_date else datetime.datetime.now().isoformat()
                 updated_last_reset_date = original_task_for_date.last_reset_date if original_task_for_date else datetime.date.today().isoformat()
+                # Preserve original status unless explicitly changed by a dedicated UI element (not yet implemented for status field)
+                original_status = original_task_for_date.status if original_task_for_date else "Pending"
+
                 task_data = Task(id=self.currently_editing_task_id, title=title_value, description=description,
                                  duration=task_duration_total_minutes, creation_date=updated_creation_date,
                                  repetition=repetition, priority=priority, category=category,
-                                 due_date=task_due_datetime_iso, status=original_task_for_date.status,
+                                 due_date=task_due_datetime_iso, status=original_status,
                                  last_reset_date=updated_last_reset_date)
                 success = db_manager.update_task(conn, task_data)
                 if success:
@@ -393,6 +409,7 @@ class TaskManagerApp:
                 logger.debug("Database connection closed (save_task_action).")
 
     def delete_selected_task(self):
+        # ... (implementation remains the same, calls self.request_reschedule_reminders() at end) ...
         selected_item_iid = self.task_tree.focus()
         if not selected_item_iid:
             try:
@@ -444,6 +461,7 @@ class TaskManagerApp:
             if conn: conn.close()
 
     def refresh_task_list(self):
+        # ... (implementation remains the same) ...
         if not self.task_tree:
             logger.error("Error: task_tree not initialized. Cannot refresh.")
             return
@@ -486,8 +504,8 @@ class TaskManagerApp:
                 conn.close()
                 logger.debug("Database connection closed after refreshing task list.")
 
+
     def on_closing(self):
-        """Handles window closing events to shut down the scheduler."""
         logger.info("WM_DELETE_WINDOW: Closing application.")
         if hasattr(self, 'scheduler') and self.scheduler and self.scheduler.running:
             logger.info("Attempting to shut down the scheduler...")
@@ -499,7 +517,6 @@ class TaskManagerApp:
         self.root.destroy()
 
     def request_reschedule_reminders(self):
-        """Requests the scheduler to re-scan tasks and update reminders soon."""
         logger.info("Requesting reschedule of reminders.")
         if hasattr(self, 'scheduler') and self.scheduler and self.scheduler.running:
             try:
@@ -519,14 +536,162 @@ class TaskManagerApp:
         else:
             logger.warning("Scheduler not available or not running. Cannot request immediate reminder reschedule.")
 
+    def _check_reminder_queue(self):
+        """Checks the reminder queue and displays popups if any."""
+        try:
+            while not self.reminder_queue.empty():
+                reminder_data = self.reminder_queue.get_nowait()
+                task_id = reminder_data.get('task_id')
+                # task_title = reminder_data.get('task_title') # Title already in full task object
+
+                if task_id is None:
+                    logger.warning("Received reminder data without task_id.")
+                    continue
+
+                # Check if a popup for this task is already active
+                if task_id in self.active_popups and self.active_popups[task_id].winfo_exists():
+                    logger.info(f"Popup for task ID {task_id} already active. Bringing to front.")
+                    self.active_popups[task_id].deiconify() # De-iconify if minimized
+                    self.active_popups[task_id].lift()      # Bring to front
+                    self.active_popups[task_id].focus_force() # Force focus
+                    continue # Skip creating a new one
+
+                conn = None
+                full_task = None
+                try:
+                    conn = db_manager.create_connection()
+                    if conn:
+                        full_task = db_manager.get_task(conn, task_id)
+                    else:
+                        logger.error(f"Cannot display reminder for task ID {task_id}: DB connection failed.")
+                        continue
+                finally:
+                    if conn: conn.close()
+
+                if full_task:
+                    if full_task.status == 'Completed': # Double check status
+                        logger.info(f"Task ID {task_id} ('{full_task.title}') is already completed. Skipping reminder popup.")
+                        continue
+
+                    logger.info(f"Displaying reminder for Task ID: {full_task.id} - Title: '{full_task.title}'")
+
+                    app_callbacks = {
+                        'reschedule': self.handle_reschedule_task, # RENAMED
+                        'complete': self.handle_complete_task,     # RENAMED
+                        'remove_from_active': self._remove_popup_from_active
+                    }
+                    popup = ReminderPopupUI(self.root, full_task, app_callbacks)
+                    self.active_popups[task_id] = popup
+                else:
+                    logger.warning(f"Could not retrieve full task details for task ID {task_id}. Cannot display reminder.")
+
+        except queue.Empty:
+            pass
+        except Exception as e:
+            logger.error(f"Error processing reminder queue: {e}", exc_info=True)
+
+        self.root.after(1000, self._check_reminder_queue)
+
+    def handle_reschedule_task(self, task_id, minutes_to_add): # RENAMED and IMPLEMENTED
+        """Handles the reschedule request from a reminder popup."""
+        logger.info(f"Attempting to reschedule task ID: {task_id} by {minutes_to_add} minutes.")
+        conn = None
+        try:
+            conn = db_manager.create_connection()
+            if not conn:
+                logger.error("Failed to connect to DB for rescheduling.")
+                if task_id in self.active_popups: del self.active_popups[task_id] # Cleanup popup ref
+                return
+
+            task = db_manager.get_task(conn, task_id)
+            if not task:
+                logger.error(f"Task ID {task_id} not found for rescheduling.")
+                if task_id in self.active_popups: del self.active_popups[task_id] # Cleanup popup ref
+                return
+
+            current_due_datetime = datetime.datetime.now()
+            if task.due_date:
+                try:
+                    current_due_datetime = datetime.datetime.fromisoformat(task.due_date)
+                except ValueError:
+                    logger.error(f"Invalid due_date format for task {task_id}: {task.due_date}. Using current time as base for reschedule.")
+
+            new_due_datetime = current_due_datetime + datetime.timedelta(minutes=minutes_to_add)
+            task.due_date = new_due_datetime.isoformat()
+            # If a task is rescheduled, it should typically revert to "Pending" if it was, for example, "Overdue"
+            # However, this example keeps its current status unless explicitly changed.
+            # task.status = "Pending" # Optional: uncomment to reset status on reschedule
+
+            if database_manager.update_task(conn, task):
+                logger.info(f"Task ID: {task_id} rescheduled successfully to {task.due_date}.")
+            else:
+                logger.error(f"Failed to update task ID: {task_id} in DB for rescheduling.")
+
+        except Exception as e:
+            logger.error(f"Error in handle_reschedule_task for task ID {task_id}: {e}", exc_info=True)
+        finally:
+            if conn:
+                conn.close()
+            # The popup calling this would have already called _remove_popup_from_active via its own _cleanup_and_destroy
+            # So, no need to explicitly delete from self.active_popups here as it's part of popup's lifecycle.
+
+        self.refresh_task_list()
+        self.request_reschedule_reminders()
+
+
+    def handle_complete_task(self, task_id): # RENAMED and IMPLEMENTED
+        """Handles the complete request from a reminder popup."""
+        logger.info(f"Attempting to mark task ID: {task_id} as 'Completed'.")
+        conn = None
+        try:
+            conn = db_manager.create_connection()
+            if not conn:
+                logger.error("Failed to connect to DB for completing task.")
+                if task_id in self.active_popups: del self.active_popups[task_id]
+                return
+
+            task = database_manager.get_task(conn, task_id)
+            if not task:
+                logger.error(f"Task ID {task_id} not found for completion.")
+                if task_id in self.active_popups: del self.active_popups[task_id]
+                return
+
+            task.status = "Completed"
+            # Consider clearing due_date for completed non-repeating tasks if desired:
+            # if not task.repetition or task.repetition.lower() == 'none':
+            #    task.due_date = None
+
+            if database_manager.update_task(conn, task):
+                logger.info(f"Task ID: {task_id} marked as 'Completed' successfully.")
+            else:
+                logger.error(f"Failed to update task ID: {task_id} status to 'Completed' in DB.")
+
+        except Exception as e:
+            logger.error(f"Error in handle_complete_task for task ID {task_id}: {e}", exc_info=True)
+        finally:
+            if conn:
+                conn.close()
+            # Popup's _cleanup_and_destroy handles removal from self.active_popups
+
+        self.refresh_task_list()
+        self.request_reschedule_reminders() # To remove/update reminder for completed task
+
+
+    def _remove_popup_from_active(self, task_id):
+        """Removes a popup from the active_popups dictionary."""
+        # This method is called by ReminderPopupUI via callback before it's destroyed.
+        if task_id in self.active_popups:
+            del self.active_popups[task_id]
+            logger.debug(f"Popup for task ID {task_id} removed from active list.")
+
+
 if __name__ == '__main__':
-    # Basic logging config moved to top level for module-wide availability before class instantiation
     try:
         root = bs.Window(themename="litera")
         app = TaskManagerApp(root)
         root.mainloop()
     except tk.TclError as e:
-        logger.error(f"Tkinter TclError: {e}", exc_info=True) # Use logger
+        logger.error(f"Tkinter TclError: {e}", exc_info=True)
         if "display name" in str(e).lower() or "couldn't connect to display" in str(e).lower():
             logger.info("Application requires a graphical display environment to run.")
             logger.info("If running in a headless environment, this error is expected.")
