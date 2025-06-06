@@ -1,12 +1,12 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import ttkbootstrap as bs
-import datetime
-from datetime import timedelta # Ensure timedelta is imported
+import datetime # Keep this, timedelta will be used as datetime.timedelta
+from datetime import timedelta # Explicitly import timedelta
 import queue
 from task_model import Task
 import database_manager
-from database_manager import check_timeslot_overlap # Added specific import
+from database_manager import check_timeslot_overlap # Ensure this is imported
 import scheduler_manager
 import logging
 from reminder_popup_ui import ReminderPopupUI
@@ -328,10 +328,12 @@ class TaskManagerApp:
             hours = int(hours_str) if hours_str else 0
             minutes = int(minutes_str) if minutes_str else 0
             if not (0 <= hours <= 99):
-                messagebox.showerror("Invalid Duration", "Hours must be between 0 and 99.", parent=self.root)
+                if not self.headless_mode: messagebox.showerror("Invalid Duration", "Hours must be between 0 and 99.", parent=self.root)
+                else: logger.error("Validation Error: Hours must be between 0 and 99.")
                 return
             if not (0 <= minutes <= 59):
-                messagebox.showerror("Invalid Duration", "Minutes must be between 0 and 59.", parent=self.root)
+                if not self.headless_mode: messagebox.showerror("Invalid Duration", "Minutes must be between 0 and 59.", parent=self.root)
+                else: logger.error("Validation Error: Minutes must be between 0 and 59.")
                 return
             task_duration_total_minutes = (hours * 60) + minutes
         except ValueError:
@@ -339,8 +341,8 @@ class TaskManagerApp:
                 messagebox.showerror("Invalid Duration", "Duration hours and minutes must be numbers.", parent=self.root)
             except tk.TclError: logger.error("Validation Error: Duration hrs/min not numbers (messagebox not available).")
             return
-        except tk.TclError:
-            logger.error("Validation Error: Duration hrs/min not numbers (messagebox not available / TclError).")
+        except tk.TclError: # Should not happen if headless_mode check is first
+            logger.error("Validation Error: Duration TclError (messagebox not available / TclError).")
             return
 
         due_date_str = self.input_widgets['due_date'].entry.get()
@@ -367,99 +369,102 @@ class TaskManagerApp:
         if task_duration_total_minutes > 0 and task_due_datetime_iso:
             try:
                 current_task_start_dt = datetime.datetime.fromisoformat(task_due_datetime_iso)
-                current_task_end_dt = current_task_start_dt + datetime.timedelta(minutes=task_duration_total_minutes)
+                current_task_end_dt = current_task_start_dt + timedelta(minutes=task_duration_total_minutes)
                 logger.info(f"Conflict Check initiated for '{title_value}' slot: {current_task_start_dt} to {current_task_end_dt}")
 
                 conn_check = None
                 try:
                     conn_check = database_manager.create_connection()
                     if not conn_check:
+                        logger.error("DB Error: Cannot check for task conflicts: DB connection failed for check.")
                         if not self.headless_mode:
-                            messagebox.showerror("DB Error", "Cannot check for task conflicts: DB connection failed.", parent=self.root)
-                        else:
-                            logger.error("DB Error: Cannot check for task conflicts: DB connection failed.")
-                        return
+                             messagebox.showwarning("DB Warning", "Could not check for task conflicts. Save cautiously.", parent=self.root)
+                    else:
+                        existing_tasks = database_manager.get_all_tasks(conn_check)
+                        conflict_found = False
+                        for existing_task in existing_tasks:
+                            if self.currently_editing_task_id and existing_task.id == self.currently_editing_task_id:
+                                continue
+                            if existing_task.status == 'Completed':
+                                continue
+                            if not existing_task.due_date or not existing_task.duration or existing_task.duration == 0:
+                                continue
 
-                    existing_tasks = database_manager.get_all_tasks(conn_check)
-                    conflict_found = False
-                    for existing_task in existing_tasks:
-                        if self.currently_editing_task_id and existing_task.id == self.currently_editing_task_id:
-                            continue
-                        if existing_task.status == 'Completed':
-                            continue
-                        if not existing_task.due_date or not existing_task.duration or existing_task.duration == 0:
-                            continue
+                            try:
+                                existing_task_start_dt = datetime.datetime.fromisoformat(existing_task.due_date)
+                                existing_task_end_dt = existing_task_start_dt + timedelta(minutes=existing_task.duration)
+                            except ValueError:
+                                logger.warning(f"Invalid date format for existing task ID {existing_task.id} ('{existing_task.due_date}'). Skipping in conflict check.")
+                                continue
 
-                        try:
-                            existing_task_start_dt = datetime.datetime.fromisoformat(existing_task.due_date)
-                            existing_task_end_dt = existing_task_start_dt + datetime.timedelta(minutes=existing_task.duration)
-                        except ValueError:
-                            logger.warning(f"Invalid date format for existing task ID {existing_task.id} ('{existing_task.due_date}'). Skipping in conflict check.")
-                            continue
+                            if check_timeslot_overlap(current_task_start_dt, current_task_end_dt,
+                                                                   existing_task_start_dt, existing_task_end_dt):
+                                conflict_msg = (f"Task '{title_value}' ({current_task_start_dt.strftime('%H:%M')} - {current_task_end_dt.strftime('%H:%M')}) "
+                                                f"conflicts with '{existing_task.title}' (due: {existing_task_start_dt.strftime('%Y-%m-%d %H:%M')}, "
+                                                f"duration: {existing_task.duration} min). Please choose a different time or duration.")
+                                logger.warning(conflict_msg)
+                                if not self.headless_mode:
+                                    messagebox.showerror("Task Conflict", conflict_msg, parent=self.root)
+                                else: # Log specific conflict for headless, as messagebox won't show
+                                    logger.error(f"HEADLESS_SAVE_ERROR: {conflict_msg}")
+                                conflict_found = True
+                                break
 
-                        if database_manager.check_timeslot_overlap(current_task_start_dt, current_task_end_dt,
-                                                               existing_task_start_dt, existing_task_end_dt):
-                            logger.warning(f"Task conflict: '{title_value}' overlaps with '{existing_task.title}' (ID: {existing_task.id})")
-                            if not self.headless_mode:
-                                messagebox.showerror("Task Conflict",
-                                                 f"Task '{title_value}' ({current_task_start_dt.strftime('%H:%M')} - {current_task_end_dt.strftime('%H:%M')}) "
-                                                 f"conflicts with '{existing_task.title}' (due: {existing_task_start_dt.strftime('%Y-%m-%d %H:%M')}, "
-                                                 f"duration: {existing_task.duration} min). Please choose a different time or duration.",
-                                                 parent=self.root)
-                            else:
-                                logger.error(f"HEADLESS_ERROR: Task Conflict with {existing_task.title}")
-                            conflict_found = True
-                            break
-
-                    if conflict_found:
-                        return
+                        if conflict_found:
+                            if conn_check: conn_check.close() # Close check connection before returning
+                            return
 
                 except Exception as e_check:
                     logger.error(f"Error during conflict check: {e_check}", exc_info=True)
                     if not self.headless_mode:
                         messagebox.showerror("Conflict Check Error", "An error occurred while checking for task conflicts. Saving aborted.", parent=self.root)
                     else:
-                        logger.error("HEADLESS_ERROR: Conflict Check Error")
+                        logger.error("HEADLESS_SAVE_ERROR: Conflict Check Error during save_task_action")
+                    if conn_check: conn_check.close() # Ensure close on this path too
                     return
                 finally:
                     if conn_check:
                         conn_check.close()
+                        logger.debug("Conflict check DB connection closed.")
             except ValueError:
                  logger.error(f"Invalid due_date ('{task_due_datetime_iso}') for current task '{title_value}' during conflict check setup. Aborting save.", exc_info=True)
                  if not self.headless_mode:
                      messagebox.showerror("Invalid Date", "The due date for the current task is invalid. Cannot save.", parent=self.root)
                  else:
-                     logger.error("HEADLESS_ERROR: Invalid Date for current task")
+                     logger.error("HEADLESS_SAVE_ERROR: Invalid Date for current task for conflict check")
                  return
-
 
         priority_display_to_model_map = {"Low": 1, "Medium": 2, "High": 3}
         priority = priority_display_to_model_map.get(priority_str, 2)
 
-        # conn = None # Already defined above
+        conn_save = None
         try:
-            # conn = database_manager.create_connection() # Connection should be established before conflict check or use the same
-            if not conn or conn.total_changes == -1: # Check if conn was closed or is invalid, then reopen
-                 conn = database_manager.create_connection()
-                 if not conn:
-                    messagebox.showerror("Database Error", "Could not connect to the database.", parent=self.root)
-                    return
+            conn_save = database_manager.create_connection()
+            if not conn_save:
+                logger.error("DB Save Op: Failed to create database connection.")
+                if not self.headless_mode:
+                    messagebox.showerror("Database Error", "Cannot save task: DB connection failed.", parent=self.root)
+                return
 
-            database_manager.create_table(conn) # Ensure table exists
+            database_manager.create_table(conn_save)
 
             if self.currently_editing_task_id is not None:
                 logger.info(f"Attempting to update task ID: {self.currently_editing_task_id}")
-                original_task_for_date = database_manager.get_task(conn, self.currently_editing_task_id)
-                updated_creation_date = original_task_for_date.creation_date if original_task_for_date else datetime.datetime.now().isoformat()
-                updated_last_reset_date = original_task_for_date.last_reset_date if original_task_for_date else datetime.date.today().isoformat()
-                original_status = original_task_for_date.status if original_task_for_date else "Pending"
+                original_task_for_update = database_manager.get_task(conn_save, self.currently_editing_task_id)
+
+                # Preserve existing creation_date, last_reset_date, and status unless explicitly changed
+                # For status, we assume it's only changed by specific actions (like 'complete' button or scheduler reset)
+                # or if a UI field for status is added later.
+                updated_creation_date = original_task_for_update.creation_date if original_task_for_update else datetime.datetime.now().isoformat()
+                updated_last_reset_date = original_task_for_update.last_reset_date if original_task_for_update else datetime.date.today().isoformat()
+                current_status = original_task_for_update.status if original_task_for_update else "Pending"
 
                 task_data_obj = Task(id=self.currently_editing_task_id, title=title_value, description=description,
                                  duration=task_duration_total_minutes, creation_date=updated_creation_date,
                                  repetition=repetition, priority=priority, category=category,
-                                 due_date=task_due_datetime_iso, status=original_status,
+                                 due_date=task_due_datetime_iso, status=current_status,
                                  last_reset_date=updated_last_reset_date)
-                success = database_manager.update_task(conn, task_data_obj)
+                success = database_manager.update_task(conn_save, task_data_obj)
                 if success:
                     try:
                         messagebox.showinfo("Success", "Task updated successfully!", parent=self.root)
@@ -474,10 +479,11 @@ class TaskManagerApp:
             else:
                 logger.info("Attempting to add new task.")
                 creation_date = datetime.datetime.now().isoformat()
+                # New tasks get default status and last_reset_date from Task model
                 new_task_obj = Task(id=0, title=title_value, description=description, duration=task_duration_total_minutes,
                                 creation_date=creation_date, repetition=repetition, priority=priority, category=category,
                                 due_date=task_due_datetime_iso)
-                task_id = database_manager.add_task(conn, new_task_obj)
+                task_id = database_manager.add_task(conn_save, new_task_obj)
                 if task_id:
                     try:
                         messagebox.showinfo("Success", f"Task saved successfully with ID: {task_id}!", parent=self.root)
@@ -503,9 +509,9 @@ class TaskManagerApp:
                     messagebox.showerror("Error", error_message, parent=self.root)
                 except tk.TclError: pass
         finally:
-            if conn:
-                conn.close()
-                logger.debug("Database connection closed (save_task_action).")
+            if conn_save:
+                conn_save.close()
+                logger.debug("DB Save Op: Connection closed.")
 
 
     def delete_selected_task(self):
@@ -637,7 +643,7 @@ class TaskManagerApp:
         logger.info("Requesting reschedule of reminders.")
         if hasattr(self, 'scheduler') and self.scheduler and self.scheduler.running:
             try:
-                run_time = datetime.datetime.now() + datetime.timedelta(seconds=3)
+                run_time = datetime.datetime.now() + timedelta(seconds=3) # Corrected: Use imported timedelta
                 job_id = 'immediate_reschedule_reminders_job'
                 logger.debug(f"Adding/replacing job '{job_id}' to run scheduler_manager.schedule_task_reminders at {run_time.isoformat()}")
                 self.scheduler.add_job(
@@ -749,7 +755,7 @@ class TaskManagerApp:
                 except ValueError:
                     logger.error(f"Invalid due_date format for task {task_id}: {task.due_date}. Using current time as base for reschedule.")
 
-            new_due_datetime = current_due_datetime + datetime.timedelta(minutes=minutes_to_add)
+            new_due_datetime = current_due_datetime + timedelta(minutes=minutes_to_add) # Corrected: Use imported timedelta
             task.due_date = new_due_datetime.isoformat()
 
             if database_manager.update_task(conn, task):
