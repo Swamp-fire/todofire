@@ -4,29 +4,29 @@ import ttkbootstrap as bs
 import datetime
 import queue
 from task_model import Task
-import database_manager as db_manager
+import database_manager # Corrected import
 import scheduler_manager
 import logging
 from reminder_popup_ui import ReminderPopupUI
 from tts_manager import tts_manager
-import time # Added import for headless mode sleep
+import time
+import sys # Added import
 
 # Configure logging at the module level.
-# This format will apply to all loggers unless they are individually reconfigured.
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)-8s - %(name)-25s - %(message)s')
-logger = logging.getLogger(__name__) # Logger for main_app specific messages
+logger = logging.getLogger(__name__)
 
 class TaskManagerApp:
-    def __init__(self, root_window, headless_mode=False): # Added headless_mode
+    def __init__(self, root_window, headless_mode=False):
         self.headless_mode = headless_mode
-        self.root = root_window # Can be None in headless_mode
+        self.root = root_window
         self.active_popups = {}
 
         logger.info(f"Initializing TaskManagerApp in {'HEADLESS' if self.headless_mode else 'GUI'} mode.")
 
         if not self.headless_mode and self.root:
             self.root.title("Task Manager")
-            self.root.geometry("800x700") # Adjusted geometry
+            self.root.geometry("800x700")
 
         self.currently_editing_task_id = None
         self.input_widgets = {}
@@ -38,14 +38,13 @@ class TaskManagerApp:
         self.priority_map_display = {1: "Low", 2: "Medium", 3: "High"}
 
         if not self.headless_mode and self.root:
-            self._setup_ui() # Only setup UI if not in headless mode
+            self._setup_ui()
             self.refresh_task_list()
             self.root.bind('<Control-m>', self.toggle_tts_mute)
             self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-            self._check_reminder_queue() # Start UI-based queue polling
+            self._check_reminder_queue()
         elif self.headless_mode:
             logger.info("UI setup and UI-based queue polling skipped in HEADLESS mode.")
-            # Note: _check_reminder_queue will be driven by the main loop in headless mode
 
         logger.info("Initializing scheduler...")
         try:
@@ -60,7 +59,6 @@ class TaskManagerApp:
         logger.info("TaskManagerApp initialization complete.")
 
     def _setup_ui(self):
-        # This method should only be called if not in headless_mode and root exists
         if self.headless_mode or not self.root:
             logger.error("_setup_ui called in headless_mode or without root. This should not happen.")
             return
@@ -73,7 +71,6 @@ class TaskManagerApp:
         form_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=5)
         form_frame.columnconfigure(1, weight=1)
 
-        # ... (rest of UI setup code as it was, ensuring self.root is used as parent) ...
         title_label = bs.Label(master=form_frame, text="Title: *")
         title_label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
         self.input_widgets['title'] = ttk.Entry(master=form_frame, width=50)
@@ -249,13 +246,13 @@ class TaskManagerApp:
 
         conn = None
         try:
-            conn = db_manager.create_connection()
+            conn = database_manager.create_connection()
             if not conn:
                 try:
                     messagebox.showerror("Database Error", "Could not connect to the database.", parent=self.root)
                 except tk.TclError: logger.error("DB Error: Could not connect (messagebox not available).")
                 return
-            task_to_edit = db_manager.get_task(conn, task_id)
+            task_to_edit = database_manager.get_task(conn, task_id)
             if not task_to_edit:
                 try:
                     messagebox.showerror("Error", f"Could not retrieve task with ID: {task_id}", parent=self.root)
@@ -371,17 +368,17 @@ class TaskManagerApp:
 
         conn = None
         try:
-            conn = db_manager.create_connection()
+            conn = database_manager.create_connection()
             if not conn:
                 try:
                     messagebox.showerror("Database Error", "Could not connect to the database.", parent=self.root)
                 except tk.TclError: logger.error("DB Error: Could not connect (messagebox not available).")
                 return
-            db_manager.create_table(conn)
+            database_manager.create_table(conn)
 
             if self.currently_editing_task_id is not None:
                 logger.info(f"Attempting to update task ID: {self.currently_editing_task_id}")
-                original_task_for_date = db_manager.get_task(conn, self.currently_editing_task_id)
+                original_task_for_date = database_manager.get_task(conn, self.currently_editing_task_id)
                 updated_creation_date = original_task_for_date.creation_date if original_task_for_date else datetime.datetime.now().isoformat()
                 updated_last_reset_date = original_task_for_date.last_reset_date if original_task_for_date else datetime.date.today().isoformat()
                 original_status = original_task_for_date.status if original_task_for_date else "Pending"
@@ -391,7 +388,7 @@ class TaskManagerApp:
                                  repetition=repetition, priority=priority, category=category,
                                  due_date=task_due_datetime_iso, status=original_status,
                                  last_reset_date=updated_last_reset_date)
-                success = db_manager.update_task(conn, task_data)
+                success = database_manager.update_task(conn, task_data)
                 if success:
                     try:
                         messagebox.showinfo("Success", "Task updated successfully!", parent=self.root)
@@ -409,7 +406,7 @@ class TaskManagerApp:
                 new_task = Task(id=0, title=title_value, description=description, duration=task_duration_total_minutes,
                                 creation_date=creation_date, repetition=repetition, priority=priority, category=category,
                                 due_date=task_due_datetime_iso)
-                task_id = db_manager.add_task(conn, new_task)
+                task_id = database_manager.add_task(conn, new_task)
                 if task_id:
                     try:
                         messagebox.showinfo("Success", f"Task saved successfully with ID: {task_id}!", parent=self.root)
@@ -470,13 +467,13 @@ class TaskManagerApp:
 
         conn = None
         try:
-            conn = db_manager.create_connection()
+            conn = database_manager.create_connection()
             if not conn:
                 try:
                     messagebox.showerror("Database Error", "Could not connect to the database.", parent=self.root)
                 except tk.TclError: logger.error("DB Error: Could not connect for deletion (messagebox not available).")
                 return
-            success = db_manager.delete_task(conn, task_id)
+            success = database_manager.delete_task(conn, task_id)
             if success:
                 try:
                     messagebox.showinfo("Success", f"Task ID: {task_id} deleted successfully!", parent=self.root)
@@ -510,7 +507,7 @@ class TaskManagerApp:
             self.task_tree.delete(item)
         conn = None
         try:
-            conn = db_manager.create_connection()
+            conn = database_manager.create_connection()
             if conn is None:
                 logger.error("Database Error: Could not connect to refresh tasks.")
                 if not self.headless_mode:
@@ -518,8 +515,8 @@ class TaskManagerApp:
                         messagebox.showerror("Database Error", "Could not connect to the database to refresh tasks.", parent=self.root)
                     except tk.TclError: pass
                 return
-            db_manager.create_table(conn)
-            tasks = db_manager.get_all_tasks(conn)
+            database_manager.create_table(conn)
+            tasks = database_manager.get_all_tasks(conn)
             for task in tasks:
                 priority_display_val = self.priority_map_display.get(task.priority, str(task.priority))
                 display_due_date = ""
@@ -607,9 +604,9 @@ class TaskManagerApp:
                 conn = None
                 task_details = None
                 try:
-                    conn = db_manager.create_connection()
+                    conn = database_manager.create_connection()
                     if conn:
-                        task_details = db_manager.get_task(conn, task_id)
+                        task_details = database_manager.get_task(conn, task_id)
                         logger.debug(f"Fetched task details for ID {task_id}: {'Found' if task_details else 'Not Found'}")
                     else:
                         logger.error(f"Cannot process reminder for task ID {task_id}: DB connection failed.")
@@ -662,13 +659,13 @@ class TaskManagerApp:
         logger.info(f"Attempting to reschedule task ID: {task_id} by {minutes_to_add} minutes.")
         conn = None
         try:
-            conn = db_manager.create_connection()
+            conn = database_manager.create_connection()
             if not conn:
                 logger.error("Failed to connect to DB for rescheduling.")
                 if task_id in self.active_popups: del self.active_popups[task_id]
                 return
 
-            task = db_manager.get_task(conn, task_id)
+            task = database_manager.get_task(conn, task_id)
             if not task:
                 logger.error(f"Task ID {task_id} not found for rescheduling.")
                 if task_id in self.active_popups: del self.active_popups[task_id]
@@ -703,7 +700,7 @@ class TaskManagerApp:
         logger.info(f"Attempting to mark task ID: {task_id} as 'Completed'.")
         conn = None
         try:
-            conn = db_manager.create_connection()
+            conn = database_manager.create_connection()
             if not conn:
                 logger.error("Failed to connect to DB for completing task.")
                 if task_id in self.active_popups: del self.active_popups[task_id]
@@ -794,25 +791,15 @@ if __name__ == '__main__':
                 sys.exit(1) # Exit with error if headless init fails
         else:
             logger.critical(f"An unexpected Tkinter TclError occurred on startup (not a display issue): {e}", exc_info=True)
-            # No specific sys.exit here, will fall through to generic finally if app was created
-            # or just exit if app was not created.
     except Exception as e:
         logger.critical(f"A critical unexpected error occurred at app root level: {e}", exc_info=True)
         sys.exit(1) # Exit with error for other critical failures
     finally:
-        # This finally block might be reached if root.mainloop() exits normally,
-        # or if an unhandled exception (other than TclError for display) occurs after `app` is defined.
-        # For headless mode, sys.exit(0) should have already terminated.
         if app:
              if not app.headless_mode and app.root and app.root.winfo_exists():
-                 pass # GUI mainloop handles its own clean exit via on_closing
+                 pass
              elif app.headless_mode :
-                 # This path should ideally not be reached if headless loop exits with sys.exit(0)
-                 # But as a safeguard:
                  if hasattr(app, 'scheduler') and app.scheduler and app.scheduler.running:
                      logger.info("Ensuring scheduler shutdown in main finally block (headless).")
                      app.scheduler.shutdown()
         logger.info("Application terminated.")
-        # If it reaches here after a GUI run, it's a normal exit.
-        # If it reaches here after a headless run, it means sys.exit(0) wasn't called, which is unexpected.
-        # For headless, the sys.exit(0) inside the headless try/finally should be the primary exit point.
