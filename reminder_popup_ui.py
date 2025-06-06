@@ -11,21 +11,24 @@ class ReminderPopupUI(bs.Toplevel):
         super().__init__(parent)
         self.task = task
         self.app_callbacks = app_callbacks
+        self.after_id = None  # ENSURED PLACEMENT
 
+        # Initialize remaining_work_seconds immediately after after_id
+        self.remaining_work_seconds = 0
+        if self.task and self.task.duration and self.task.duration > 0:
+            self.remaining_work_seconds = self.task.duration * 60
+
+        # NOW other initializations like title, geometry, wm_attributes, etc.
         self.title("Reminder!")
         self.geometry("400x300")
         self.wm_attributes("-topmost", 1)
         self.resizable(False, False)
         self.protocol("WM_DELETE_WINDOW", self.skip_reminder)
 
-        self.remaining_work_seconds = 0
-        if self.task and self.task.duration and self.task.duration > 0:
-            self.remaining_work_seconds = self.task.duration * 60
-
         self.style = ttk.Style()
-        self.after_id = None
         self._setup_ui()
 
+        # Start countdown if applicable, after UI is set up
         if self.remaining_work_seconds > 0:
             self._update_countdown()
 
