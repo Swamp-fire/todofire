@@ -18,9 +18,9 @@ class TTSManager:
     def __init__(self):
         self.engine = None
         self.is_muted = False
-        self.default_volume = 0.8  # Volume is a float between 0.0 and 1.0
-        self.tts_lock = threading.Lock() # Lock to ensure thread-safe access to engine operations
-        self._engine_init_error_logged_once = False # To avoid spamming logs if engine fails
+        self.default_volume = 0.8
+        self.tts_lock = threading.Lock()
+        self._engine_init_error_logged_once = False
         self._initialize_engine()
 
     def _initialize_engine(self):
@@ -29,21 +29,28 @@ class TTSManager:
             self.engine = pyttsx3.init()
             if self.engine:
                 self.engine.setProperty('volume', self.default_volume)
-                # Optional: Log details about the selected engine/voice
+                current_rate = self.engine.getProperty('rate')
+                logger.debug(f"TTS Engine properties: Volume={self.default_volume}, Rate={current_rate}")
                 try:
-                    current_voice = self.engine.getProperty('voice')
+                    current_voice_id = self.engine.getProperty('voice')
                     voices = self.engine.getProperty('voices')
-                    logger.debug(f"TTS Engine initialized. Current Voice ID: {current_voice}")
-                    # for i, voice in enumerate(voices):
-                    #     logger.debug(f"Voice {i}: ID: {voice.id}, Name: {voice.name}, Lang: {voice.languages}")
-                except Exception as voice_prop_error:
-                    logger.warning(f"Could not retrieve voice properties: {voice_prop_error}")
+                    current_voice_details = "N/A"
+                    for v in voices:
+                        if v.id == current_voice_id:
+                            current_voice_details = f"ID: {v.id}, Name: {v.name}, Langs: {v.languages}"
+                            break
+                    logger.debug(f"TTS Engine Voice details: {current_voice_details}")
+                except Exception as voice_prop_error: # Some drivers might not support all voice properties
+                    logger.warning(f"Could not retrieve detailed voice properties: {voice_prop_error}", exc_info=True)
                 logger.info("TTS Engine Initialized successfully.")
             else:
                 logger.error("pyttsx3.init() returned None. TTS engine not available.")
-                self.engine = None # Ensure it's None
+                self.engine = None
+        except RuntimeError as r_err: # Catch specific RuntimeError from pyttsx3 for missing drivers
+             logger.error(f"Failed to initialize TTS engine (RuntimeError, possibly missing drivers like espeak): {r_err}", exc_info=True)
+             self.engine = None
         except Exception as e:
-            logger.error(f"Failed to initialize TTS engine: {e}", exc_info=True)
+            logger.error(f"Generic failure to initialize TTS engine: {e}", exc_info=True)
             self.engine = None
 
     def set_mute(self, mute_status: bool):
@@ -56,6 +63,7 @@ class TTSManager:
         Speaks the given text using TTS if the engine is available and not muted.
         Runs the speech in a separate thread to avoid blocking the main UI.
         """
+        logger.debug(f"Speak request: text='{text}', muted={self.is_muted}, engine_exists={self.engine is not None}")
         if self.engine is None:
             if not self._engine_init_error_logged_once:
                 logger.warning("TTS engine not initialized or failed to initialize. Cannot speak.")
@@ -70,9 +78,9 @@ class TTSManager:
         if error_context:
             speech_text = f"Error: {text}"
 
-        logger.info(f"Queueing speech: '{speech_text}'")
-        # Run TTS in a separate thread to avoid blocking UI
+        logger.info(f"Queueing speech via new thread: '{speech_text}'")
         thread = threading.Thread(target=self._run_tts, args=(speech_text,), daemon=True)
+        thread.name = f"TTSThread-{text[:15]}" # Give thread a name for easier debugging
         thread.start()
 
     def _run_tts(self, text: str):
@@ -80,27 +88,28 @@ class TTSManager:
         Internal method to run the TTS engine's say and runAndWait.
         This method is executed in a separate thread and uses a lock.
         """
-        # Try to acquire lock without blocking. If busy, skip this speech request.
+        logger.debug(f"TTS Thread '{threading.current_thread().name}': Attempting to acquire lock for text: '{text}'")
         acquired_lock = self.tts_lock.acquire(blocking=False)
         if not acquired_lock:
-            logger.warning(f"TTS engine busy, speech for '{text}' skipped.")
+            logger.warning(f"TTS Thread '{threading.current_thread().name}': Engine busy, speech for '{text}' skipped.")
             return
 
+        logger.debug(f"TTS Thread '{threading.current_thread().name}': Lock acquired.")
         try:
-            if self.engine: # Re-check engine status within the thread
-                logger.debug(f"TTS attempting to say: '{text}'")
+            if self.engine:
+                logger.info(f"TTS Thread '{threading.current_thread().name}': Saying: '{text}'")
                 self.engine.say(text)
-                self.engine.runAndWait() # This blocks within this thread, not the main thread
-                logger.debug(f"TTS finished saying: '{text}'")
+                self.engine.runAndWait()
+                logger.info(f"TTS Thread '{threading.current_thread().name}': Finished saying: '{text}'")
             else:
-                logger.warning("TTS engine became unavailable before speech could occur in thread.")
+                logger.warning(f"TTS Thread '{threading.current_thread().name}': Engine became unavailable before speech.")
         except Exception as e:
-            logger.error(f"TTS engine error during speech for '{text}': {e}", exc_info=True)
+            logger.error(f"TTS Thread '{threading.current_thread().name}': Engine error during speech for '{text}': {e}", exc_info=True)
         finally:
-            self.tts_lock.release() # Always release the lock
+            self.tts_lock.release()
+            logger.debug(f"TTS Thread '{threading.current_thread().name}': Lock released.")
 
 # Global instance of the TTSManager
-# This instance can be imported by other modules (e.g., main_app.py, scheduler_manager.py).
 tts_manager = TTSManager()
 
 # Example usage for testing this module directly (optional)

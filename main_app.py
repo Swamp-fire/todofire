@@ -8,16 +8,25 @@ import database_manager as db_manager
 import scheduler_manager
 import logging
 from reminder_popup_ui import ReminderPopupUI
-from tts_manager import tts_manager # Added import
+from tts_manager import tts_manager
+import time # Added import for headless mode sleep
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Configure logging at the module level.
+# This format will apply to all loggers unless they are individually reconfigured.
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)-8s - %(name)-25s - %(message)s')
+logger = logging.getLogger(__name__) # Logger for main_app specific messages
 
 class TaskManagerApp:
-    def __init__(self, root_window):
-        self.root = root_window
-        self.root.title("Task Manager")
-        self.root.geometry("700x800")
+    def __init__(self, root_window, headless_mode=False): # Added headless_mode
+        self.headless_mode = headless_mode
+        self.root = root_window # Can be None in headless_mode
+        self.active_popups = {}
+
+        logger.info(f"Initializing TaskManagerApp in {'HEADLESS' if self.headless_mode else 'GUI'} mode.")
+
+        if not self.headless_mode and self.root:
+            self.root.title("Task Manager")
+            self.root.geometry("800x700") # Adjusted geometry
 
         self.currently_editing_task_id = None
         self.input_widgets = {}
@@ -25,33 +34,37 @@ class TaskManagerApp:
         self.save_button = None
 
         self.reminder_queue = queue.Queue()
-        self.active_popups = {}
-
         self.scheduler = None
-
         self.priority_map_display = {1: "Low", 2: "Medium", 3: "High"}
 
-        self._setup_ui()
-        self.refresh_task_list()
+        if not self.headless_mode and self.root:
+            self._setup_ui() # Only setup UI if not in headless mode
+            self.refresh_task_list()
+            self.root.bind('<Control-m>', self.toggle_tts_mute)
+            self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+            self._check_reminder_queue() # Start UI-based queue polling
+        elif self.headless_mode:
+            logger.info("UI setup and UI-based queue polling skipped in HEADLESS mode.")
+            # Note: _check_reminder_queue will be driven by the main loop in headless mode
 
+        logger.info("Initializing scheduler...")
         try:
             self.scheduler = scheduler_manager.initialize_scheduler(self.reminder_queue)
             if self.scheduler:
-                logger.info("Scheduler initialized successfully from TaskManagerApp.")
+                logger.info("Scheduler initialized successfully.")
             else:
-                logger.error("Scheduler failed to initialize from TaskManagerApp.")
+                logger.error("Scheduler failed to initialize (returned None).")
         except Exception as e:
-            logger.error(f"Error initializing scheduler from TaskManagerApp: {e}", exc_info=True)
+            logger.error(f"Exception during scheduler initialization: {e}", exc_info=True)
 
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-
-        # Bind Ctrl-M to toggle TTS mute
-        self.root.bind('<Control-m>', self.toggle_tts_mute)
-        logger.info("Ctrl-M shortcut bound to toggle_tts_mute method.")
-
-        self._check_reminder_queue()
+        logger.info("TaskManagerApp initialization complete.")
 
     def _setup_ui(self):
+        # This method should only be called if not in headless_mode and root exists
+        if self.headless_mode or not self.root:
+            logger.error("_setup_ui called in headless_mode or without root. This should not happen.")
+            return
+
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=0)
         self.root.rowconfigure(1, weight=1)
@@ -60,6 +73,7 @@ class TaskManagerApp:
         form_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=5)
         form_frame.columnconfigure(1, weight=1)
 
+        # ... (rest of UI setup code as it was, ensuring self.root is used as parent) ...
         title_label = bs.Label(master=form_frame, text="Title: *")
         title_label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
         self.input_widgets['title'] = ttk.Entry(master=form_frame, width=50)
@@ -183,7 +197,6 @@ class TaskManagerApp:
         self.task_tree.heading("creation_date", text="Created On", anchor='w')
         self.task_tree.column("creation_date", width=130, stretch=False)
 
-
         vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.task_tree.yview)
         self.task_tree.configure(yscrollcommand=vsb.set)
         vsb.grid(row=0, column=1, sticky='ns')
@@ -192,7 +205,13 @@ class TaskManagerApp:
         hsb.grid(row=1, column=0, sticky='ew')
         self.task_tree.grid(row=0, column=0, sticky='nsew')
 
+
     def clear_form_fields_and_reset_state(self):
+        if self.headless_mode:
+            self.currently_editing_task_id = None
+            logger.info("Form fields state reset (headless mode).")
+            return
+
         self.input_widgets['title'].delete(0, tk.END)
         self.input_widgets['description'].delete("1.0", tk.END)
         self.input_widgets['repetition'].set('None')
@@ -210,8 +229,10 @@ class TaskManagerApp:
             self.save_button.config(text="Save Task")
         logger.info("Form fields cleared and state reset.")
 
-
     def load_selected_task_for_edit(self):
+        if self.headless_mode:
+            logger.warning("load_selected_task_for_edit called in headless_mode. UI not available.")
+            return
         selected_item_iid = self.task_tree.focus()
         if not selected_item_iid:
             try:
@@ -286,7 +307,12 @@ class TaskManagerApp:
         finally:
             if conn: conn.close()
 
+
     def save_task_action(self):
+        if self.headless_mode:
+            logger.error("save_task_action called in headless_mode. This should not happen via UI.")
+            return
+
         title_value = self.input_widgets['title'].get().strip()
         if not title_value:
             try:
@@ -396,19 +422,28 @@ class TaskManagerApp:
                         messagebox.showerror("Error", "Failed to save task to database.", parent=self.root)
                     except tk.TclError: logger.error("Error: Failed to save task (messagebox not available).")
         except tk.TclError as e_tk:
-            logger.error(f"A TclError occurred: {e_tk}. (Likely messagebox in headless environment)", exc_info=True)
+             if not self.headless_mode:
+                logger.error(f"A TclError occurred: {e_tk}. (Likely messagebox in headless environment)", exc_info=True)
+             else:
+                logger.warning(f"A TclError was suppressed in headless mode: {e_tk}")
+
         except Exception as e:
             error_message = f"An unexpected error occurred in save_task_action: {e}"
             logger.error(error_message, exc_info=True)
-            try:
-                messagebox.showerror("Error", error_message, parent=self.root)
-            except tk.TclError: pass
+            if not self.headless_mode:
+                try:
+                    messagebox.showerror("Error", error_message, parent=self.root)
+                except tk.TclError: pass
         finally:
             if conn:
                 conn.close()
                 logger.debug("Database connection closed (save_task_action).")
 
+
     def delete_selected_task(self):
+        if self.headless_mode:
+            logger.warning("delete_selected_task called in headless_mode. UI not available.")
+            return
         selected_item_iid = self.task_tree.focus()
         if not selected_item_iid:
             try:
@@ -422,11 +457,15 @@ class TaskManagerApp:
                 messagebox.showerror("Error", "Invalid task ID in selection.", parent=self.root)
             except tk.TclError: logger.error("Invalid task ID in selection (messagebox not available).")
             return
+
+        confirmed_delete = False
         try:
-            confirm = messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete task ID: {task_id}?", parent=self.root)
-            if not confirm: return
+            confirmed_delete = messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete task ID: {task_id}?", parent=self.root)
+            if not confirmed_delete:
+                logger.info(f"Deletion of task ID {task_id} cancelled by user.")
+                return
         except tk.TclError:
-            logger.info(f"Confirmation for deleting task ID {task_id} skipped (messagebox not available). No deletion performed.")
+            logger.info(f"Confirmation for deleting task ID {task_id} skipped (messagebox not available). Assuming NO for safety in headless.")
             return
 
         conn = None
@@ -459,7 +498,11 @@ class TaskManagerApp:
         finally:
             if conn: conn.close()
 
+
     def refresh_task_list(self):
+        if self.headless_mode:
+            logger.debug("refresh_task_list called in headless_mode. Skipping UI Treeview update.")
+            return
         if not self.task_tree:
             logger.error("Error: task_tree not initialized. Cannot refresh.")
             return
@@ -470,9 +513,10 @@ class TaskManagerApp:
             conn = db_manager.create_connection()
             if conn is None:
                 logger.error("Database Error: Could not connect to refresh tasks.")
-                try:
-                    messagebox.showerror("Database Error", "Could not connect to the database to refresh tasks.", parent=self.root)
-                except tk.TclError: pass
+                if not self.headless_mode:
+                    try:
+                        messagebox.showerror("Database Error", "Could not connect to the database to refresh tasks.", parent=self.root)
+                    except tk.TclError: pass
                 return
             db_manager.create_table(conn)
             tasks = db_manager.get_all_tasks(conn)
@@ -494,9 +538,10 @@ class TaskManagerApp:
         except Exception as e:
             error_message = f"Error refreshing task list: {e}"
             logger.error(error_message, exc_info=True)
-            try:
-                messagebox.showerror("Error", error_message, parent=self.root)
-            except tk.TclError: pass
+            if not self.headless_mode:
+                try:
+                    messagebox.showerror("Error", error_message, parent=self.root)
+                except tk.TclError: pass
         finally:
             if conn:
                 conn.close()
@@ -512,84 +557,108 @@ class TaskManagerApp:
                 logger.info("Scheduler shutdown successfully.")
             except Exception as e:
                 logger.error(f"Error during scheduler shutdown: {e}", exc_info=True)
-        self.root.destroy()
+
+        if not self.headless_mode and self.root:
+            logger.info("Destroying main window.")
+            self.root.destroy()
+        elif self.headless_mode:
+            logger.info("Headless mode: No root window to destroy. Application will exit if main loop isn't running.")
+
 
     def request_reschedule_reminders(self):
         logger.info("Requesting reschedule of reminders.")
         if hasattr(self, 'scheduler') and self.scheduler and self.scheduler.running:
             try:
                 run_time = datetime.datetime.now() + datetime.timedelta(seconds=3)
+                job_id = 'immediate_reschedule_reminders_job'
+                logger.debug(f"Adding/replacing job '{job_id}' to run scheduler_manager.schedule_task_reminders at {run_time.isoformat()}")
                 self.scheduler.add_job(
                     scheduler_manager.schedule_task_reminders,
                     trigger='date',
                     run_date=run_time,
                     args=[self.scheduler],
-                    id='immediate_reschedule_reminders_job',
+                    id=job_id,
                     replace_existing=True,
                     misfire_grace_time=60
                 )
-                logger.info(f"Scheduled 'schedule_task_reminders' to run at {run_time.isoformat()}.")
             except Exception as e:
                 logger.error(f"Error requesting immediate reschedule of reminders: {e}", exc_info=True)
         else:
             logger.warning("Scheduler not available or not running. Cannot request immediate reminder reschedule.")
 
     def _check_reminder_queue(self):
-        """Checks the reminder queue and displays popups if any."""
+        if not self.headless_mode and (not self.root or not self.root.winfo_exists()):
+            logger.warning("Root window not available in _check_reminder_queue (GUI mode). Stopping poll.")
+            return
+
+        logger.debug("Checking reminder queue...")
         try:
             while not self.reminder_queue.empty():
                 reminder_data = self.reminder_queue.get_nowait()
+                logger.debug(f"Retrieved from reminder_queue: {reminder_data}")
                 task_id = reminder_data.get('task_id')
 
                 if task_id is None:
-                    logger.warning("Received reminder data without task_id.")
+                    logger.warning("Received reminder data without task_id from queue.")
                     continue
 
-                if task_id in self.active_popups and self.active_popups[task_id].winfo_exists():
-                    logger.info(f"Popup for task ID {task_id} already active. Bringing to front.")
-                    self.active_popups[task_id].deiconify()
-                    self.active_popups[task_id].lift()
-                    self.active_popups[task_id].focus_force()
-                    continue
+                logger.info(f"Processing reminder for task ID {task_id} from queue.")
 
                 conn = None
-                full_task = None
+                task_details = None
                 try:
                     conn = db_manager.create_connection()
                     if conn:
-                        full_task = db_manager.get_task(conn, task_id)
+                        task_details = db_manager.get_task(conn, task_id)
+                        logger.debug(f"Fetched task details for ID {task_id}: {'Found' if task_details else 'Not Found'}")
                     else:
-                        logger.error(f"Cannot display reminder for task ID {task_id}: DB connection failed.")
+                        logger.error(f"Cannot process reminder for task ID {task_id}: DB connection failed.")
                         continue
                 finally:
                     if conn: conn.close()
 
-                if full_task:
-                    if full_task.status == 'Completed':
-                        logger.info(f"Task ID {task_id} ('{full_task.title}') is already completed. Skipping reminder popup.")
+                if not task_details:
+                    logger.warning(f"Could not retrieve full task details for task ID {task_id}. Cannot display/process reminder.")
+                    continue
+
+                if task_details.status == 'Completed':
+                    logger.info(f"Task ID {task_id} ('{task_details.title}') is already completed. Skipping reminder.")
+                    continue
+
+                if self.headless_mode:
+                    logger.info(f"HEADLESS_TEST: Reminder triggered for task ID: {task_id} - Title: '{task_details.title}'.")
+                    if task_details.title:
+                        logger.info(f"HEADLESS_TEST: Requesting TTS for: Task {task_details.title}")
+                        tts_manager.speak(f"Reminder for task: {task_details.title}")
+                    else:
+                        logger.warning(f"HEADLESS_TEST: Task ID {task_id} has no title. Speaking generic reminder.")
+                        tts_manager.speak("Reminder for task with no title.")
+                else:
+                    if task_id in self.active_popups and self.active_popups[task_id].winfo_exists():
+                        logger.info(f"Popup for task ID {task_id} already active. Bringing to front.")
+                        self.active_popups[task_id].deiconify()
+                        self.active_popups[task_id].lift()
+                        self.active_popups[task_id].focus_force()
                         continue
-
-                    logger.info(f"Displaying reminder for Task ID: {full_task.id} - Title: '{full_task.title}'")
-
+                    logger.info(f"Attempting to create ReminderPopupUI for task ID {task_id}. Active popups: {list(self.active_popups.keys())}")
                     app_callbacks = {
                         'reschedule': self.handle_reschedule_task,
                         'complete': self.handle_complete_task,
                         'remove_from_active': self._remove_popup_from_active
                     }
-                    popup = ReminderPopupUI(self.root, full_task, app_callbacks)
+                    popup = ReminderPopupUI(self.root, task_details, app_callbacks)
                     self.active_popups[task_id] = popup
-                else:
-                    logger.warning(f"Could not retrieve full task details for task ID {task_id}. Cannot display reminder.")
+                    logger.info(f"ReminderPopupUI created and added to active_popups for task ID {task_id}.")
 
         except queue.Empty:
             pass
         except Exception as e:
             logger.error(f"Error processing reminder queue: {e}", exc_info=True)
 
-        self.root.after(1000, self._check_reminder_queue)
+        if not self.headless_mode and self.root and self.root.winfo_exists():
+             self.root.after(250, self._check_reminder_queue)
 
     def handle_reschedule_task(self, task_id, minutes_to_add):
-        """Handles the reschedule request from a reminder popup."""
         logger.info(f"Attempting to reschedule task ID: {task_id} by {minutes_to_add} minutes.")
         conn = None
         try:
@@ -625,12 +694,12 @@ class TaskManagerApp:
         finally:
             if conn:
                 conn.close()
-        self.refresh_task_list()
+
+        if not self.headless_mode: self.refresh_task_list()
         self.request_reschedule_reminders()
 
 
     def handle_complete_task(self, task_id):
-        """Handles the complete request from a reminder popup."""
         logger.info(f"Attempting to mark task ID: {task_id} as 'Completed'.")
         conn = None
         try:
@@ -658,18 +727,17 @@ class TaskManagerApp:
         finally:
             if conn:
                 conn.close()
-        self.refresh_task_list()
+
+        if not self.headless_mode: self.refresh_task_list()
         self.request_reschedule_reminders()
 
 
     def _remove_popup_from_active(self, task_id):
-        """Removes a popup from the active_popups dictionary."""
         if task_id in self.active_popups:
             del self.active_popups[task_id]
             logger.debug(f"Popup for task ID {task_id} removed from active list.")
 
-    def toggle_tts_mute(self, event=None): # Added method
-        """Toggles the mute state of the TTS engine."""
+    def toggle_tts_mute(self, event=None):
         if tts_manager:
             try:
                 current_mute_state = tts_manager.is_muted
@@ -683,16 +751,68 @@ class TaskManagerApp:
 
 
 if __name__ == '__main__':
+    root = None
+    app = None
     try:
+        logger.info("Application starting...")
         root = bs.Window(themename="litera")
-        app = TaskManagerApp(root)
+        logger.info("GUI mode detected. Initializing TaskManagerApp for GUI.")
+        app = TaskManagerApp(root_window=root, headless_mode=False)
+        logger.info("Starting Tkinter mainloop...")
         root.mainloop()
+        logger.info("Tkinter mainloop finished.")
+
     except tk.TclError as e:
-        logger.error(f"Tkinter TclError: {e}", exc_info=True)
+        logger.error(f"Tkinter TclError occurred: {e}", exc_info=True)
         if "display name" in str(e).lower() or "couldn't connect to display" in str(e).lower():
-            logger.info("Application requires a graphical display environment to run.")
-            logger.info("If running in a headless environment, this error is expected.")
+            logger.info("No display found, attempting to run in HEADLESS test mode.")
+            app = TaskManagerApp(root_window=None, headless_mode=True)
+
+            if app.headless_mode:
+                logger.info("Running in HEADLESS test mode. Scheduler and queue processing active.")
+                logger.info("Application will simulate running for up to 5 minutes. Press Ctrl+C to interrupt.")
+                if not app.scheduler or not app.scheduler.running:
+                    logger.warning("Scheduler not running in headless mode. Reminders might not be processed.")
+
+                end_time = time.time() + (60 * 5)
+                try:
+                    while time.time() < end_time:
+                        app._check_reminder_queue()
+                        time.sleep(0.25)
+                    logger.info("HEADLESS test mode finished after 5 minutes.")
+                except KeyboardInterrupt:
+                    logger.info("HEADLESS test mode interrupted by user (Ctrl+C).")
+                finally:
+                    logger.info("HEADLESS_TEST: Main loop ending. Preparing to shut down scheduler...")
+                    if hasattr(app, 'scheduler') and app.scheduler and app.scheduler.running:
+                        logger.info("HEADLESS_TEST: Shutting down scheduler.")
+                        app.scheduler.shutdown()
+                    logger.info("HEADLESS_TEST: Application exiting.")
+                    sys.exit(0) # Explicitly exit with 0 for successful headless run
+            else:
+                logger.error("Failed to correctly initialize in headless_mode. Exiting.")
+                sys.exit(1) # Exit with error if headless init fails
         else:
-            logger.error(f"An unexpected Tkinter TclError occurred: {e}", exc_info=True)
+            logger.critical(f"An unexpected Tkinter TclError occurred on startup (not a display issue): {e}", exc_info=True)
+            # No specific sys.exit here, will fall through to generic finally if app was created
+            # or just exit if app was not created.
     except Exception as e:
-        logger.critical(f"A critical unexpected error occurred: {e}", exc_info=True)
+        logger.critical(f"A critical unexpected error occurred at app root level: {e}", exc_info=True)
+        sys.exit(1) # Exit with error for other critical failures
+    finally:
+        # This finally block might be reached if root.mainloop() exits normally,
+        # or if an unhandled exception (other than TclError for display) occurs after `app` is defined.
+        # For headless mode, sys.exit(0) should have already terminated.
+        if app:
+             if not app.headless_mode and app.root and app.root.winfo_exists():
+                 pass # GUI mainloop handles its own clean exit via on_closing
+             elif app.headless_mode :
+                 # This path should ideally not be reached if headless loop exits with sys.exit(0)
+                 # But as a safeguard:
+                 if hasattr(app, 'scheduler') and app.scheduler and app.scheduler.running:
+                     logger.info("Ensuring scheduler shutdown in main finally block (headless).")
+                     app.scheduler.shutdown()
+        logger.info("Application terminated.")
+        # If it reaches here after a GUI run, it's a normal exit.
+        # If it reaches here after a headless run, it means sys.exit(0) wasn't called, which is unexpected.
+        # For headless, the sys.exit(0) inside the headless try/finally should be the primary exit point.
