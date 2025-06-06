@@ -10,9 +10,8 @@ import logging
 from reminder_popup_ui import ReminderPopupUI
 from tts_manager import tts_manager
 import time
-import sys # Added import
+import sys
 
-# Configure logging at the module level.
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)-8s - %(name)-25s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -201,7 +200,6 @@ class TaskManagerApp:
         self.task_tree.configure(xscrollcommand=hsb.set)
         hsb.grid(row=1, column=0, sticky='ew')
         self.task_tree.grid(row=0, column=0, sticky='nsew')
-
 
     def clear_form_fields_and_reset_state(self):
         if self.headless_mode:
@@ -573,7 +571,7 @@ class TaskManagerApp:
                     scheduler_manager.schedule_task_reminders,
                     trigger='date',
                     run_date=run_time,
-                    args=[self.scheduler],
+                    args=[self.scheduler, self.reminder_queue],
                     id=job_id,
                     replace_existing=True,
                     misfire_grace_time=60
