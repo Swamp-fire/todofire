@@ -310,7 +310,7 @@ class TaskManagerApp:
             logger.error("save_task_action called in headless_mode. This should not happen via UI.")
             return
 
-        title_value = self.input_widgets['title'].get().strip()
+        title_value = self.input_widgets['title'].get().strip() # Used in logging
         if not title_value:
             try:
                 messagebox.showerror("Validation Error", "Title field cannot be empty.", parent=self.root)
@@ -318,7 +318,7 @@ class TaskManagerApp:
             return
 
         description = self.input_widgets['description'].get("1.0", tk.END).strip()
-        repetition = self.input_widgets['repetition'].get()
+        current_task_repetition = self.input_widgets['repetition'].get() # Renamed from 'repetition' for clarity in this function
         priority_str = self.input_widgets['priority'].get()
         category = self.input_widgets['category'].get().strip()
 
@@ -341,7 +341,7 @@ class TaskManagerApp:
                 messagebox.showerror("Invalid Duration", "Duration hours and minutes must be numbers.", parent=self.root)
             except tk.TclError: logger.error("Validation Error: Duration hrs/min not numbers (messagebox not available).")
             return
-        except tk.TclError: # Should not happen if headless_mode check is first
+        except tk.TclError:
             logger.error("Validation Error: Duration TclError (messagebox not available / TclError).")
             return
 
@@ -367,10 +367,12 @@ class TaskManagerApp:
 
         # Conflict Check Logic
         if task_duration_total_minutes > 0 and task_due_datetime_iso:
+            perf_start_conflict_check_section = time.perf_counter()
+            logger.debug(f"Conflict Check Perf: Entering conflict check section at {perf_start_conflict_check_section:.4f}")
             try:
-                current_task_start_dt = datetime.datetime.fromisoformat(task_due_datetime_iso)
-                current_task_end_dt = current_task_start_dt + timedelta(minutes=task_duration_total_minutes)
-                logger.info(f"Conflict Check initiated for '{title_value}' slot: {current_task_start_dt} to {current_task_end_dt}")
+                ct_start_dt = datetime.datetime.fromisoformat(task_due_datetime_iso) # Renamed for clarity
+                ct_end_dt = ct_start_dt + timedelta(minutes=task_duration_total_minutes) # Renamed for clarity
+                logger.info(f"Conflict Check initiated for '{title_value}' slot: {ct_start_dt} to {ct_end_dt}")
 
                 conn_check = None
                 try:
@@ -381,7 +383,11 @@ class TaskManagerApp:
                              messagebox.showwarning("DB Warning", "Could not check for task conflicts. Save cautiously.", parent=self.root)
                     else:
                         existing_tasks = database_manager.get_all_tasks(conn_check)
-                        conflict_found = False
+                        perf_after_get_all_tasks = time.perf_counter()
+                        logger.debug(f"Conflict Check Perf: Fetched all tasks for check at {perf_after_get_all_tasks:.4f}. "
+                                     f"DB query time: {perf_after_get_all_tasks - perf_start_conflict_check_section:.4f}s")
+
+                        conflict_found = False # Overall flag for this save operation
                         for existing_task in existing_tasks:
                             if self.currently_editing_task_id and existing_task.id == self.currently_editing_task_id:
                                 continue
@@ -391,63 +397,100 @@ class TaskManagerApp:
                                 continue
 
                             try:
-                                existing_task_start_dt = datetime.datetime.fromisoformat(existing_task.due_date)
-                                existing_task_end_dt = existing_task_start_dt + timedelta(minutes=existing_task.duration)
+                                et_start_dt = datetime.datetime.fromisoformat(existing_task.due_date) # Renamed
+                                et_end_dt = et_start_dt + timedelta(minutes=existing_task.duration) # Renamed
                             except ValueError:
                                 logger.warning(f"Invalid date format for existing task ID {existing_task.id} ('{existing_task.due_date}'). Skipping in conflict check.")
                                 continue
 
-                            # Get repetitions for conditional logging
-                            current_task_repetition_for_log = repetition # from form
-                            existing_task_repetition_for_log = existing_task.repetition
+                            # Corrected conflict checking logic starts here
+                            is_potential_conflict = False # Initialize for this pair comparison
+                            # current_task_repetition is already defined from form input
+                            existing_task_repetition = existing_task.repetition if existing_task.repetition else 'None'
 
-                            log_daily_conflict_details = current_task_repetition_for_log == 'Daily' and \
-                                                         existing_task_repetition_for_log == 'Daily'
+                            if current_task_repetition == existing_task_repetition:
+                                logger.debug(f"Conflict Check: Same repetition type ('{current_task_repetition}') "
+                                             f"for current task '{title_value}' and existing task '{existing_task.title}' (ID: {existing_task.id}). Performing specific check.")
+                                if current_task_repetition == 'None': # One-Time vs One-Time
+                                    time_overlap_result = database_manager.check_timeslot_overlap(
+                                        ct_start_dt, ct_end_dt,
+                                        et_start_dt, et_end_dt
+                                    )
+                                    logger.debug(f"  ONE-TIME_VS_ONE-TIME Check for Current Task '{title_value}' vs Existing '{existing_task.title}':")
+                                    logger.debug(f"    Current Task Slot: {ct_start_dt.isoformat()} - {ct_end_dt.isoformat()}")
+                                    logger.debug(f"    Existing Task Slot: {et_start_dt.isoformat()} - {et_end_dt.isoformat()}")
+                                    logger.debug(f"    check_timeslot_overlap returned: {time_overlap_result}")
+                                    if time_overlap_result:
+                                        is_potential_conflict = True
 
-                            if log_daily_conflict_details:
-                                ct_start_time = current_task_start_dt.time()
-                                # task_duration_total_minutes is defined earlier in save_task_action
-                                ct_end_time_for_log = (current_task_start_dt + timedelta(minutes=task_duration_total_minutes)).time()
+                                else: # Handles 'Daily', 'Weekly', 'Monthly', 'Yearly' all using check_time_only_overlap
+                                    ct_start_time = ct_start_dt.time()
+                                    ct_end_time_val = (ct_start_dt + timedelta(minutes=task_duration_total_minutes)).time()
+                                    et_start_time = et_start_dt.time()
+                                    et_end_time_val = (et_start_dt + timedelta(minutes=existing_task.duration)).time()
 
-                                et_start_time = existing_task_start_dt.time()
-                                # existing_task.duration is available
-                                et_end_time_for_log = (existing_task_start_dt + timedelta(minutes=existing_task.duration)).time()
+                                    specific_match_criteria = False # Renamed from specific_match for clarity
+                                    # Determine if date parts match for repeating tasks other than Daily
+                                    if current_task_repetition == 'Daily':
+                                        specific_match_criteria = True
+                                    elif current_task_repetition == 'Weekly':
+                                        if ct_start_dt.weekday() == et_start_dt.weekday():
+                                            specific_match_criteria = True
+                                    elif current_task_repetition == 'Monthly':
+                                        if ct_start_dt.day == et_start_dt.day:
+                                            specific_match_criteria = True
+                                    elif current_task_repetition == 'Yearly':
+                                        if ct_start_dt.month == et_start_dt.month and ct_start_dt.day == et_start_dt.day:
+                                            specific_match_criteria = True
 
-                                logger.debug(f"DAILY_CONFLICT_CHECK for Current Task '{title_value}' (ID: {self.currently_editing_task_id if self.currently_editing_task_id else 'New'}) vs Existing '{existing_task.title}' (ID: {existing_task.id}):")
-                                logger.debug(f"  Current Task Time Slot (for check_time_only_overlap): {ct_start_time} - {ct_end_time_for_log}")
-                                logger.debug(f"  Existing Task Time Slot (for check_time_only_overlap): {et_start_time} - {et_end_time_for_log}")
+                                    if specific_match_criteria:
+                                        logger.debug(f"  {current_task_repetition.upper()}_VS_{current_task_repetition.upper()} Check for Current Task '{title_value}' vs Existing '{existing_task.title}':")
+                                        if current_task_repetition != 'Daily':
+                                            logger.debug(f"    Date parts match criteria (e.g., weekday, day of month).")
+                                        logger.debug(f"    Current Task Time Slot (for check_time_only_overlap): {ct_start_time.isoformat()} - {ct_end_time_val.isoformat()}")
+                                        logger.debug(f"    Existing Task Time Slot (for check_time_only_overlap): {et_start_time.isoformat()} - {et_end_time_val.isoformat()}")
 
-                            # Actual conflict check call
-                            conflict_this_pair = check_timeslot_overlap(
-                                current_task_start_dt, current_task_end_dt,
-                                existing_task_start_dt, existing_task_end_dt
-                            )
+                                        time_overlap_result = database_manager.check_time_only_overlap(
+                                            ct_start_time, ct_end_time_val,
+                                            et_start_time, et_end_time_val
+                                        )
+                                        logger.debug(f"    check_time_only_overlap returned: {time_overlap_result}")
+                                        if time_overlap_result:
+                                            is_potential_conflict = True
+                                    else: # For Weekly, Monthly, Yearly if date parts don't match
+                                         logger.debug(f"  {current_task_repetition.upper()}_VS_{current_task_repetition.upper()} Check for Current Task '{title_value}' vs Existing '{existing_task.title}': Date parts do not match criteria. No time overlap check needed.")
 
-                            if log_daily_conflict_details:
-                                # This logs the result of the comprehensive check_timeslot_overlap,
-                                # which internally handles the time-only aspect for daily tasks.
-                                logger.debug(f"  check_timeslot_overlap (which considers time_only for Daily) returned: {conflict_this_pair}")
+                                logger.debug(f"  is_potential_conflict after {current_task_repetition} check: {is_potential_conflict}")
 
-                            if conflict_this_pair:
-                                if log_daily_conflict_details:
-                                    logger.debug(f"  is_potential_conflict after Daily check: True")
+                            else: # current_task_repetition != existing_task_repetition
+                                logger.debug(f"Conflict Check: Different repetition types ('{current_task_repetition}' for current task '{title_value}' "
+                                             f"vs '{existing_task_repetition}' for existing task '{existing_task.title}' ID {existing_task.id}). "
+                                             f"No overlap check performed as per rules.")
+                                is_potential_conflict = False # Explicitly ensure it's false
 
-                                conflict_msg = (f"Task '{title_value}' ({current_task_start_dt.strftime('%H:%M')} - {current_task_end_dt.strftime('%H:%M')}) "
-                                                f"conflicts with '{existing_task.title}' (due: {existing_task_start_dt.strftime('%Y-%m-%d %H:%M')}, "
-                                                f"duration: {existing_task.duration} min). Please choose a different time or duration.")
-                                logger.warning(conflict_msg)
+                            if is_potential_conflict: # This is the flag for the current PAIR of tasks
+                                conflict_msg = (f"Task '{title_value}' ({ct_start_dt.strftime('%Y-%m-%d %H:%M')}, Rep: {current_task_repetition}) "
+                                                f"conflicts with existing task '{existing_task.title}' (ID: {existing_task.id}, Due: {et_start_dt.strftime('%Y-%m-%d %H:%M')}, Rep: {existing_task_repetition}, "
+                                                f"duration: {existing_task.duration} min). Please choose a different time, duration, or repetition.")
+                                logger.warning(conflict_msg) # Log the specific conflict
                                 if not self.headless_mode:
                                     messagebox.showerror("Task Conflict", conflict_msg, parent=self.root)
-                                else: # Log specific conflict for headless, as messagebox won't show
+                                else:
                                     logger.error(f"HEADLESS_SAVE_ERROR: {conflict_msg}")
-                                conflict_found = True
-                                break
-                            elif log_daily_conflict_details: # Only log if it was a daily check and no conflict
-                                logger.debug(f"  is_potential_conflict after Daily check: False")
+                                conflict_found = True # Set overall flag for this save operation
+                                break # Exit the loop for existing_tasks
 
-                        if conflict_found:
-                            if conn_check: conn_check.close() # Close check connection before returning
-                            return
+                        if conflict_found: # If any pair caused a conflict
+                            perf_after_conflict_loop = time.perf_counter() # Log before returning due to conflict
+                            logger.debug(f"Conflict Check Perf: Finished conflict processing loop (conflict found) at {perf_after_conflict_loop:.4f}. "
+                                         f"Loop processing time: {perf_after_conflict_loop - perf_after_get_all_tasks:.4f}s")
+                            if conn_check: conn_check.close()
+                            return # Abort save_task_action
+
+                        # This point is reached if loop completed without finding any conflict
+                        perf_after_conflict_loop = time.perf_counter()
+                        logger.debug(f"Conflict Check Perf: Finished conflict processing loop (no conflict found yet) at {perf_after_conflict_loop:.4f}. "
+                                     f"Loop processing time: {perf_after_conflict_loop - perf_after_get_all_tasks:.4f}s")
 
                 except Exception as e_check:
                     logger.error(f"Error during conflict check: {e_check}", exc_info=True)
@@ -457,11 +500,17 @@ class TaskManagerApp:
                         logger.error("HEADLESS_SAVE_ERROR: Conflict Check Error during save_task_action")
                     if conn_check: conn_check.close() # Ensure close on this path too
                     return
-                finally:
+                finally: # This finally block is for the inner try/except that includes get_all_tasks and the loop
                     if conn_check:
                         conn_check.close()
                         logger.debug("Conflict check DB connection closed.")
-            except ValueError:
+
+                # If we reach here, no conflict was found in the loop and no exception in DB connection/query
+                perf_end_conflict_check_section = time.perf_counter()
+                logger.debug(f"Conflict Check Perf: Exiting conflict check section (no conflict found) at {perf_end_conflict_check_section:.4f}. "
+                             f"Total time in conflict check section: {perf_end_conflict_check_section - perf_start_conflict_check_section:.4f}s")
+
+            except ValueError: # This is for the outer try, if fromisoformat fails
                  logger.error(f"Invalid due_date ('{task_due_datetime_iso}') for current task '{title_value}' during conflict check setup. Aborting save.", exc_info=True)
                  if not self.headless_mode:
                      messagebox.showerror("Invalid Date", "The due date for the current task is invalid. Cannot save.", parent=self.root)
@@ -487,16 +536,13 @@ class TaskManagerApp:
                 logger.info(f"Attempting to update task ID: {self.currently_editing_task_id}")
                 original_task_for_update = database_manager.get_task(conn_save, self.currently_editing_task_id)
 
-                # Preserve existing creation_date, last_reset_date, and status unless explicitly changed
-                # For status, we assume it's only changed by specific actions (like 'complete' button or scheduler reset)
-                # or if a UI field for status is added later.
                 updated_creation_date = original_task_for_update.creation_date if original_task_for_update else datetime.datetime.now().isoformat()
                 updated_last_reset_date = original_task_for_update.last_reset_date if original_task_for_update else datetime.date.today().isoformat()
                 current_status = original_task_for_update.status if original_task_for_update else "Pending"
 
                 task_data_obj = Task(id=self.currently_editing_task_id, title=title_value, description=description,
                                  duration=task_duration_total_minutes, creation_date=updated_creation_date,
-                                 repetition=repetition, priority=priority, category=category,
+                                 repetition=current_task_repetition, priority=priority, category=category, # Use current_task_repetition
                                  due_date=task_due_datetime_iso, status=current_status,
                                  last_reset_date=updated_last_reset_date)
                 success = database_manager.update_task(conn_save, task_data_obj)
@@ -514,9 +560,8 @@ class TaskManagerApp:
             else:
                 logger.info("Attempting to add new task.")
                 creation_date = datetime.datetime.now().isoformat()
-                # New tasks get default status and last_reset_date from Task model
                 new_task_obj = Task(id=0, title=title_value, description=description, duration=task_duration_total_minutes,
-                                creation_date=creation_date, repetition=repetition, priority=priority, category=category,
+                                creation_date=creation_date, repetition=current_task_repetition, priority=priority, category=category, # Use current_task_repetition
                                 due_date=task_due_datetime_iso)
                 task_id = database_manager.add_task(conn_save, new_task_obj)
                 if task_id:
@@ -678,7 +723,7 @@ class TaskManagerApp:
         logger.info("Requesting reschedule of reminders.")
         if hasattr(self, 'scheduler') and self.scheduler and self.scheduler.running:
             try:
-                run_time = datetime.datetime.now() + timedelta(seconds=3) # Corrected: Use imported timedelta
+                run_time = datetime.datetime.now() + timedelta(seconds=3)
                 job_id = 'immediate_reschedule_reminders_job'
                 logger.debug(f"Adding/replacing job '{job_id}' to run scheduler_manager.schedule_task_reminders at {run_time.isoformat()}")
                 self.scheduler.add_job(
@@ -790,7 +835,7 @@ class TaskManagerApp:
                 except ValueError:
                     logger.error(f"Invalid due_date format for task {task_id}: {task.due_date}. Using current time as base for reschedule.")
 
-            new_due_datetime = current_due_datetime + timedelta(minutes=minutes_to_add) # Corrected: Use imported timedelta
+            new_due_datetime = current_due_datetime + timedelta(minutes=minutes_to_add)
             task.due_date = new_due_datetime.isoformat()
 
             if database_manager.update_task(conn, task):

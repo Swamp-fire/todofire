@@ -11,10 +11,10 @@ Traceback (most recent call last):
   File "/home/swebot/.local/lib/python3.10/site-packages/pyttsx3/drivers/__init__.py", line 23, in fromUtf8
     return value.decode('utf-8')
 AttributeError: 'NoneType' object has no attribute 'decode'
-2025-06-07 08:51:22,111 - INFO     - __main__                  - Application starting...
-2025-06-07 08:51:22,116 - ERROR    - __main__                  - Tkinter TclError occurred: no display name and no $DISPLAY environment variable
+2025-06-07 10:12:24,570 - INFO     - __main__                  - Application starting...
+2025-06-07 10:12:24,582 - ERROR    - __main__                  - Tkinter TclError occurred: no display name and no $DISPLAY environment variable
 Traceback (most recent call last):
-  File "/app/main_app.py", line 867, in <module>
+  File "/app/main_app.py", line 913, in <module>
     root = bs.Window(themename="litera")
   File "/home/swebot/.local/lib/python3.10/site-packages/ttkbootstrap/window.py", line 235, in __init__
     super().__init__(**kwargs)
@@ -23,104 +23,51 @@ Traceback (most recent call last):
   File "/usr/lib/python3.10/tkinter/__init__.py", line 2302, in __init__
     self.tk = _tkinter.create(screenName, baseName, className, interactive, wantobjects, useTk, sync, use)
 _tkinter.TclError: no display name and no $DISPLAY environment variable
-2025-06-07 08:51:22,131 - INFO     - __main__                  - No display found, attempting to run in HEADLESS test mode.
-2025-06-07 08:51:22,131 - INFO     - __main__                  - Initializing TaskManagerApp in HEADLESS mode.
-2025-06-07 08:51:22,131 - INFO     - __main__                  - UI setup and UI-based queue polling skipped in HEADLESS mode.
-2025-06-07 08:51:22,131 - INFO     - __main__                  - Initializing scheduler...
-2025-06-07 08:51:22,138 - INFO     - apscheduler.scheduler     - Adding job tentatively -- it will be properly scheduled when the scheduler starts
-2025-06-07 08:51:22,139 - INFO     - scheduler_manager         - Added interval job for 'check_repeating_tasks': ID='job_check_repetition', Hours=1
-2025-06-07 08:51:22,139 - INFO     - apscheduler.scheduler     - Adding job tentatively -- it will be properly scheduled when the scheduler starts
-2025-06-07 08:51:22,139 - INFO     - scheduler_manager         - Added interval job for 'schedule_task_reminders': ID='job_rescheduler_reminders', Seconds=20
-2025-06-07 08:51:22,141 - INFO     - apscheduler.scheduler     - Added job "check_repeating_tasks" to job store "default"
-2025-06-07 08:51:22,141 - INFO     - apscheduler.scheduler     - Added job "schedule_task_reminders" to job store "default"
-2025-06-07 08:51:22,141 - INFO     - apscheduler.scheduler     - Scheduler started
-2025-06-07 08:51:22,142 - INFO     - scheduler_manager         - BackgroundScheduler initialized and started.
-2025-06-07 08:51:22,142 - INFO     - scheduler_manager         - Performing initial scan and scheduling of reminders...
-2025-06-07 08:51:22,142 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
-2025-06-07 08:51:22,147 - INFO     - scheduler_manager         - Fetched 0 tasks from DB for reminder scheduling.
-2025-06-07 08:51:22,148 - INFO     - scheduler_manager         - No tasks found and no existing reminder jobs to clean. Exiting 'schedule_task_reminders'.
-2025-06-07 08:51:22,148 - INFO     - __main__                  - Scheduler initialized successfully.
-2025-06-07 08:51:22,148 - INFO     - __main__                  - TaskManagerApp initialization complete.
-2025-06-07 08:51:22,148 - INFO     - __main__                  - Running in HEADLESS test mode. Scheduler and queue processing active.
-2025-06-07 08:51:22,148 - INFO     - __main__                  - Application will simulate running for up to 5 minutes. Press Ctrl+C to interrupt.
-2025-06-07 08:51:42,140 - INFO     - apscheduler.executors.default - Running job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:51:42 UTC)" (scheduled at 2025-06-07 08:51:42.139131+00:00)
-2025-06-07 08:51:42,140 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
-2025-06-07 08:51:42,142 - INFO     - scheduler_manager         - Fetched 2 tasks from DB for reminder scheduling.
-2025-06-07 08:51:42,143 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:51:42,143 - INFO     - scheduler_manager         - Scheduled reminder for Task 'OneTime Tomorrow 5AM Test' (ID: 1). Trigger: {'trigger': 'date', 'run_date': datetime.datetime(2025, 6, 8, 5, 0)}
-2025-06-07 08:51:42,149 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:51:42,150 - INFO     - scheduler_manager         - Scheduled reminder for Task 'Daily Tomorrow 5AM Test' (ID: 2). Trigger: {'trigger': 'cron', 'start_date': datetime.datetime(2025, 6, 8, 5, 0), 'hour': 5, 'minute': 0}
-2025-06-07 08:51:42,150 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' completed. Tasks processed: 2. New reminders: 2, Updated: 0, Skipped (past one-time): 0, Skipped (no trigger): 0, Removed stale: 0.
-2025-06-07 08:51:42,150 - INFO     - apscheduler.executors.default - Job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:52:02 UTC)" executed successfully
-2025-06-07 08:52:02,139 - INFO     - apscheduler.executors.default - Running job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:52:22 UTC)" (scheduled at 2025-06-07 08:52:02.139131+00:00)
-2025-06-07 08:52:02,140 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
-2025-06-07 08:52:02,140 - INFO     - scheduler_manager         - Fetched 2 tasks from DB for reminder scheduling.
-2025-06-07 08:52:02,141 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:52:02,141 - INFO     - scheduler_manager         - Updated reminder for Task 'OneTime Tomorrow 5AM Test' (ID: 1). Trigger: {'trigger': 'date', 'run_date': datetime.datetime(2025, 6, 8, 5, 0)}
-2025-06-07 08:52:02,141 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:52:02,142 - INFO     - scheduler_manager         - Updated reminder for Task 'Daily Tomorrow 5AM Test' (ID: 2). Trigger: {'trigger': 'cron', 'start_date': datetime.datetime(2025, 6, 8, 5, 0), 'hour': 5, 'minute': 0}
-2025-06-07 08:52:02,142 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' completed. Tasks processed: 2. New reminders: 0, Updated: 2, Skipped (past one-time): 0, Skipped (no trigger): 0, Removed stale: 0.
-2025-06-07 08:52:02,142 - INFO     - apscheduler.executors.default - Job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:52:22 UTC)" executed successfully
-2025-06-07 08:52:22,139 - INFO     - apscheduler.executors.default - Running job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:52:42 UTC)" (scheduled at 2025-06-07 08:52:22.139131+00:00)
-2025-06-07 08:52:22,140 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
-2025-06-07 08:52:22,140 - INFO     - scheduler_manager         - Fetched 2 tasks from DB for reminder scheduling.
-2025-06-07 08:52:22,141 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:52:22,141 - INFO     - scheduler_manager         - Updated reminder for Task 'OneTime Tomorrow 5AM Test' (ID: 1). Trigger: {'trigger': 'date', 'run_date': datetime.datetime(2025, 6, 8, 5, 0)}
-2025-06-07 08:52:22,141 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:52:22,142 - INFO     - scheduler_manager         - Updated reminder for Task 'Daily Tomorrow 5AM Test' (ID: 2). Trigger: {'trigger': 'cron', 'start_date': datetime.datetime(2025, 6, 8, 5, 0), 'hour': 5, 'minute': 0}
-2025-06-07 08:52:22,142 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' completed. Tasks processed: 2. New reminders: 0, Updated: 2, Skipped (past one-time): 0, Skipped (no trigger): 0, Removed stale: 0.
-2025-06-07 08:52:22,142 - INFO     - apscheduler.executors.default - Job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:52:42 UTC)" executed successfully
-2025-06-07 08:52:42,139 - INFO     - apscheduler.executors.default - Running job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:53:02 UTC)" (scheduled at 2025-06-07 08:52:42.139131+00:00)
-2025-06-07 08:52:42,140 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
-2025-06-07 08:52:42,140 - INFO     - scheduler_manager         - Fetched 2 tasks from DB for reminder scheduling.
-2025-06-07 08:52:42,140 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:52:42,141 - INFO     - scheduler_manager         - Updated reminder for Task 'OneTime Tomorrow 5AM Test' (ID: 1). Trigger: {'trigger': 'date', 'run_date': datetime.datetime(2025, 6, 8, 5, 0)}
-2025-06-07 08:52:42,141 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:52:42,141 - INFO     - scheduler_manager         - Updated reminder for Task 'Daily Tomorrow 5AM Test' (ID: 2). Trigger: {'trigger': 'cron', 'start_date': datetime.datetime(2025, 6, 8, 5, 0), 'hour': 5, 'minute': 0}
-2025-06-07 08:52:42,141 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' completed. Tasks processed: 2. New reminders: 0, Updated: 2, Skipped (past one-time): 0, Skipped (no trigger): 0, Removed stale: 0.
-2025-06-07 08:52:42,141 - INFO     - apscheduler.executors.default - Job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:53:02 UTC)" executed successfully
-2025-06-07 08:53:02,139 - INFO     - apscheduler.executors.default - Running job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:53:22 UTC)" (scheduled at 2025-06-07 08:53:02.139131+00:00)
-2025-06-07 08:53:02,140 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
-2025-06-07 08:53:02,140 - INFO     - scheduler_manager         - Fetched 2 tasks from DB for reminder scheduling.
-2025-06-07 08:53:02,140 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:53:02,141 - INFO     - scheduler_manager         - Updated reminder for Task 'OneTime Tomorrow 5AM Test' (ID: 1). Trigger: {'trigger': 'date', 'run_date': datetime.datetime(2025, 6, 8, 5, 0)}
-2025-06-07 08:53:02,141 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:53:02,141 - INFO     - scheduler_manager         - Updated reminder for Task 'Daily Tomorrow 5AM Test' (ID: 2). Trigger: {'trigger': 'cron', 'start_date': datetime.datetime(2025, 6, 8, 5, 0), 'hour': 5, 'minute': 0}
-2025-06-07 08:53:02,141 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' completed. Tasks processed: 2. New reminders: 0, Updated: 2, Skipped (past one-time): 0, Skipped (no trigger): 0, Removed stale: 0.
-2025-06-07 08:53:02,142 - INFO     - apscheduler.executors.default - Job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:53:22 UTC)" executed successfully
-2025-06-07 08:53:22,139 - INFO     - apscheduler.executors.default - Running job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:53:42 UTC)" (scheduled at 2025-06-07 08:53:22.139131+00:00)
-2025-06-07 08:53:22,140 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
-2025-06-07 08:53:22,140 - INFO     - scheduler_manager         - Fetched 2 tasks from DB for reminder scheduling.
-2025-06-07 08:53:22,140 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:53:22,141 - INFO     - scheduler_manager         - Updated reminder for Task 'OneTime Tomorrow 5AM Test' (ID: 1). Trigger: {'trigger': 'date', 'run_date': datetime.datetime(2025, 6, 8, 5, 0)}
-2025-06-07 08:53:22,141 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:53:22,141 - INFO     - scheduler_manager         - Updated reminder for Task 'Daily Tomorrow 5AM Test' (ID: 2). Trigger: {'trigger': 'cron', 'start_date': datetime.datetime(2025, 6, 8, 5, 0), 'hour': 5, 'minute': 0}
-2025-06-07 08:53:22,141 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' completed. Tasks processed: 2. New reminders: 0, Updated: 2, Skipped (past one-time): 0, Skipped (no trigger): 0, Removed stale: 0.
-2025-06-07 08:53:22,141 - INFO     - apscheduler.executors.default - Job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:53:42 UTC)" executed successfully
-2025-06-07 08:53:42,139 - INFO     - apscheduler.executors.default - Running job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:54:02 UTC)" (scheduled at 2025-06-07 08:53:42.139131+00:00)
-2025-06-07 08:53:42,140 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
-2025-06-07 08:53:42,140 - INFO     - scheduler_manager         - Fetched 2 tasks from DB for reminder scheduling.
-2025-06-07 08:53:42,140 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:53:42,140 - INFO     - scheduler_manager         - Updated reminder for Task 'OneTime Tomorrow 5AM Test' (ID: 1). Trigger: {'trigger': 'date', 'run_date': datetime.datetime(2025, 6, 8, 5, 0)}
-2025-06-07 08:53:42,141 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:53:42,141 - INFO     - scheduler_manager         - Updated reminder for Task 'Daily Tomorrow 5AM Test' (ID: 2). Trigger: {'trigger': 'cron', 'start_date': datetime.datetime(2025, 6, 8, 5, 0), 'hour': 5, 'minute': 0}
-2025-06-07 08:53:42,141 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' completed. Tasks processed: 2. New reminders: 0, Updated: 2, Skipped (past one-time): 0, Skipped (no trigger): 0, Removed stale: 0.
-2025-06-07 08:53:42,141 - INFO     - apscheduler.executors.default - Job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:54:02 UTC)" executed successfully
-2025-06-07 08:54:02,139 - INFO     - apscheduler.executors.default - Running job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:54:22 UTC)" (scheduled at 2025-06-07 08:54:02.139131+00:00)
-2025-06-07 08:54:02,140 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
-2025-06-07 08:54:02,140 - INFO     - scheduler_manager         - Fetched 2 tasks from DB for reminder scheduling.
-2025-06-07 08:54:02,140 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:54:02,141 - INFO     - scheduler_manager         - Updated reminder for Task 'OneTime Tomorrow 5AM Test' (ID: 1). Trigger: {'trigger': 'date', 'run_date': datetime.datetime(2025, 6, 8, 5, 0)}
-2025-06-07 08:54:02,141 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:54:02,141 - INFO     - scheduler_manager         - Updated reminder for Task 'Daily Tomorrow 5AM Test' (ID: 2). Trigger: {'trigger': 'cron', 'start_date': datetime.datetime(2025, 6, 8, 5, 0), 'hour': 5, 'minute': 0}
-2025-06-07 08:54:02,141 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' completed. Tasks processed: 2. New reminders: 0, Updated: 2, Skipped (past one-time): 0, Skipped (no trigger): 0, Removed stale: 0.
-2025-06-07 08:54:02,141 - INFO     - apscheduler.executors.default - Job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:54:22 UTC)" executed successfully
-2025-06-07 08:54:22,139 - INFO     - apscheduler.executors.default - Running job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:54:42 UTC)" (scheduled at 2025-06-07 08:54:22.139131+00:00)
-2025-06-07 08:54:22,140 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
-2025-06-07 08:54:22,140 - INFO     - scheduler_manager         - Fetched 2 tasks from DB for reminder scheduling.
-2025-06-07 08:54:22,141 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:54:22,141 - INFO     - scheduler_manager         - Updated reminder for Task 'OneTime Tomorrow 5AM Test' (ID: 1). Trigger: {'trigger': 'date', 'run_date': datetime.datetime(2025, 6, 8, 5, 0)}
-2025-06-07 08:54:22,141 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
-2025-06-07 08:54:22,141 - INFO     - scheduler_manager         - Updated reminder for Task 'Daily Tomorrow 5AM Test' (ID: 2). Trigger: {'trigger': 'cron', 'start_date': datetime.datetime(2025, 6, 8, 5, 0), 'hour': 5, 'minute': 0}
-2025-06-07 08:54:22,141 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' completed. Tasks processed: 2. New reminders: 0, Updated: 2, Skipped (past one-time): 0, Skipped (no trigger): 0, Removed stale: 0.
-2025-06-07 08:54:22,141 - INFO     - apscheduler.executors.default - Job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 08:54:42 UTC)" executed successfully
+2025-06-07 10:12:24,601 - INFO     - __main__                  - No display found, attempting to run in HEADLESS test mode.
+2025-06-07 10:12:24,601 - INFO     - __main__                  - Initializing TaskManagerApp in HEADLESS mode.
+2025-06-07 10:12:24,601 - INFO     - __main__                  - UI setup and UI-based queue polling skipped in HEADLESS mode.
+2025-06-07 10:12:24,601 - INFO     - __main__                  - Initializing scheduler...
+2025-06-07 10:12:24,609 - INFO     - apscheduler.scheduler     - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-06-07 10:12:24,609 - INFO     - scheduler_manager         - Job 'job_check_repetition' (check_repeating_tasks) configured to run every 1 hour.
+2025-06-07 10:12:24,609 - INFO     - apscheduler.scheduler     - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-06-07 10:12:24,609 - INFO     - scheduler_manager         - Job 'job_rescheduler_reminders' (schedule_task_reminders) TEMPORARILY configured to run every 20 seconds for this test.
+2025-06-07 10:12:24,612 - INFO     - apscheduler.scheduler     - Added job "check_repeating_tasks" to job store "default"
+2025-06-07 10:12:24,612 - INFO     - apscheduler.scheduler     - Added job "schedule_task_reminders" to job store "default"
+2025-06-07 10:12:24,612 - INFO     - apscheduler.scheduler     - Scheduler started
+2025-06-07 10:12:24,613 - INFO     - scheduler_manager         - BackgroundScheduler initialized and started.
+2025-06-07 10:12:24,613 - INFO     - scheduler_manager         - Performing initial scan and scheduling of reminders...
+2025-06-07 10:12:24,613 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
+2025-06-07 10:12:24,619 - INFO     - scheduler_manager         - Fetched 0 tasks from DB for reminder scheduling.
+2025-06-07 10:12:24,620 - INFO     - scheduler_manager         - No tasks found and no existing reminder jobs to clean. Exiting 'schedule_task_reminders'.
+2025-06-07 10:12:24,620 - INFO     - __main__                  - Scheduler initialized successfully.
+2025-06-07 10:12:24,620 - INFO     - __main__                  - TaskManagerApp initialization complete.
+2025-06-07 10:12:24,620 - INFO     - __main__                  - Running in HEADLESS test mode. Scheduler and queue processing active.
+2025-06-07 10:12:24,620 - INFO     - __main__                  - Application will simulate running for up to 5 minutes. Press Ctrl+C to interrupt.
+2025-06-07 10:12:44,611 - INFO     - apscheduler.executors.default - Running job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 10:12:44 UTC)" (scheduled at 2025-06-07 10:12:44.609640+00:00)
+2025-06-07 10:12:44,612 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
+2025-06-07 10:12:44,613 - INFO     - scheduler_manager         - Fetched 1 tasks from DB for reminder scheduling.
+2025-06-07 10:12:44,622 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
+2025-06-07 10:12:44,622 - INFO     - scheduler_manager         - Scheduled reminder for Task 'Daily Task A 1AM' (ID: 1). Trigger: {'trigger': 'cron', 'start_date': datetime.datetime(2025, 6, 9, 1, 0), 'hour': 1, 'minute': 0}
+2025-06-07 10:12:44,622 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' completed. Tasks processed: 1. New reminders: 1, Updated: 0, Skipped (past one-time): 0, Skipped (no trigger): 0, Removed stale: 0.
+2025-06-07 10:12:44,622 - INFO     - apscheduler.executors.default - Job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 10:13:04 UTC)" executed successfully
+2025-06-07 10:13:04,610 - INFO     - apscheduler.executors.default - Running job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 10:13:24 UTC)" (scheduled at 2025-06-07 10:13:04.609640+00:00)
+2025-06-07 10:13:04,610 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
+2025-06-07 10:13:04,611 - INFO     - scheduler_manager         - Fetched 1 tasks from DB for reminder scheduling.
+2025-06-07 10:13:04,612 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
+2025-06-07 10:13:04,612 - INFO     - scheduler_manager         - Updated reminder for Task 'Daily Task A 1AM' (ID: 1). Trigger: {'trigger': 'cron', 'start_date': datetime.datetime(2025, 6, 9, 1, 0), 'hour': 1, 'minute': 0}
+2025-06-07 10:13:04,612 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' completed. Tasks processed: 1. New reminders: 0, Updated: 1, Skipped (past one-time): 0, Skipped (no trigger): 0, Removed stale: 0.
+2025-06-07 10:13:04,612 - INFO     - apscheduler.executors.default - Job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 10:13:24 UTC)" executed successfully
+2025-06-07 10:13:24,610 - INFO     - apscheduler.executors.default - Running job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 10:13:44 UTC)" (scheduled at 2025-06-07 10:13:24.609640+00:00)
+2025-06-07 10:13:24,610 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
+2025-06-07 10:13:24,611 - INFO     - scheduler_manager         - Fetched 1 tasks from DB for reminder scheduling.
+2025-06-07 10:13:24,611 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
+2025-06-07 10:13:24,611 - INFO     - scheduler_manager         - Updated reminder for Task 'Daily Task A 1AM' (ID: 1). Trigger: {'trigger': 'cron', 'start_date': datetime.datetime(2025, 6, 9, 1, 0), 'hour': 1, 'minute': 0}
+2025-06-07 10:13:24,611 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' completed. Tasks processed: 1. New reminders: 0, Updated: 1, Skipped (past one-time): 0, Skipped (no trigger): 0, Removed stale: 0.
+2025-06-07 10:13:24,611 - INFO     - apscheduler.executors.default - Job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 10:13:44 UTC)" executed successfully
+2025-06-07 10:13:44,610 - INFO     - apscheduler.executors.default - Running job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 10:14:04 UTC)" (scheduled at 2025-06-07 10:13:44.609640+00:00)
+2025-06-07 10:13:44,610 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
+2025-06-07 10:13:44,611 - INFO     - scheduler_manager         - Fetched 1 tasks from DB for reminder scheduling.
+2025-06-07 10:13:44,611 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
+2025-06-07 10:13:44,611 - INFO     - scheduler_manager         - Updated reminder for Task 'Daily Task A 1AM' (ID: 1). Trigger: {'trigger': 'cron', 'start_date': datetime.datetime(2025, 6, 9, 1, 0), 'hour': 1, 'minute': 0}
+2025-06-07 10:13:44,611 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' completed. Tasks processed: 1. New reminders: 0, Updated: 1, Skipped (past one-time): 0, Skipped (no trigger): 0, Removed stale: 0.
+2025-06-07 10:13:44,612 - INFO     - apscheduler.executors.default - Job "schedule_task_reminders (trigger: interval[0:00:20], next run at: 2025-06-07 10:14:04 UTC)" executed successfully
