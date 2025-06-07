@@ -135,33 +135,54 @@ def check_timeslot_overlap(start_dt1: datetime.datetime, end_dt1: datetime.datet
 
     return max(start_dt1, start_dt2) < min(end_dt1, end_dt2)
 
-def check_time_only_overlap(start_time1: time, end_time1: time,
-                               start_time2: time, end_time2: time) -> bool:
+def check_time_only_overlap(st1: datetime.time, et1: datetime.time,
+                               st2: datetime.time, et2: datetime.time) -> bool:
     """
-    Checks if two time-of-day intervals [start_time1, end_time1) and
-    [start_time2, end_time2) overlap. Assumes times are on the same conceptual day.
-    IMPORTANT: This function expects end_time > start_time for each interval.
-    It does NOT handle cases where an interval inherently crosses midnight by passing
-    time objects like (22:00, 02:00) where end_time < start_time.
-    The logic in main_app.py must account for midnight crossings by potentially
-    splitting intervals or projecting them onto comparable date contexts if needed,
-    before calling this function with adjusted time segments or using check_timeslot_overlap.
+    Checks if two time-of-day intervals [st1, et1) and [st2, et2) overlap.
+    Handles intervals that cross midnight (e.g., where et1 < st1 numerically).
     The end of the interval is considered exclusive.
-    Returns True if they overlap, False otherwise.
+    Assumes durations are positive and less than 24 hours for simplicity of this check.
     """
-    if not (isinstance(start_time1, time) and
-            isinstance(end_time1, time) and
-            isinstance(start_time2, time) and
-            isinstance(end_time2, time)):
-        print(f"Warning (check_time_only_overlap): Non-datetime.time type passed. Types: {type(start_time1)}, {type(end_time1)}, {type(start_time2)}, {type(end_time2)}")
+    if not (isinstance(st1, datetime.time) and isinstance(et1, datetime.time) and
+            isinstance(st2, datetime.time) and isinstance(et2, datetime.time)):
+        print(f"Warning (check_time_only_overlap): Non-datetime.time type passed: {type(st1)}, {type(et1)}, {type(st2)}, {type(et2)}")
         return False
 
-    if start_time1 >= end_time1 or start_time2 >= end_time2:
-        print(f"Warning (check_time_only_overlap): Invalid time interval (start_time >= end_time): "
-              f"{start_time1}-{end_time1} or {start_time2}-{end_time2}")
-        return False
+    # Normalize times to represent intervals on a potential two-day span if they cross midnight
+    i1_crosses_midnight = (et1 < st1)
+    i2_crosses_midnight = (et2 < st2)
 
-    return max(start_time1, start_time2) < min(end_time1, end_time2)
+    # Case 1: Both intervals DO NOT cross midnight (simple case)
+    if not i1_crosses_midnight and not i2_crosses_midnight:
+        if st1 >= et1 or st2 >= et2: # Invalid interval if not crossing midnight
+             print(f"Warning (check_time_only_overlap): Invalid non-crossing time interval: {st1}-{et1} or {st2}-{et2}")
+             return False
+        return max(st1, st2) < min(et1, et2)
+
+    # Case 2: Interval 1 crosses midnight, Interval 2 does NOT
+    elif i1_crosses_midnight and not i2_crosses_midnight:
+        if st2 >= et2: # Invalid interval for non-crossing
+            print(f"Warning (check_time_only_overlap): Invalid non-crossing time interval 2: {st2}-{et2}")
+            return False
+        # Check if Interval 2 overlaps with [i1_st, time.max] OR [time.min, i1_et]
+        overlap_part1 = (max(st1, st2) < min(datetime.time.max, et2))
+        overlap_part2 = (max(datetime.time.min, st2) < min(et1, et2))
+        return overlap_part1 or overlap_part2
+
+    # Case 3: Interval 2 crosses midnight, Interval 1 does NOT
+    elif not i1_crosses_midnight and i2_crosses_midnight:
+        if st1 >= et1: # Invalid interval for non-crossing
+            print(f"Warning (check_time_only_overlap): Invalid non-crossing time interval 1: {st1}-{et1}")
+            return False
+        # Symmetric to Case 2
+        overlap_part1 = (max(st2, st1) < min(datetime.time.max, et1))
+        overlap_part2 = (max(datetime.time.min, st1) < min(et2, et1))
+        return overlap_part1 or overlap_part2
+
+    # Case 4: Both intervals cross midnight
+    else: # i1_crosses_midnight and i2_crosses_midnight
+        # If both intervals span across midnight, they are guaranteed to overlap
+        return True
 
 
 if __name__ == '__main__':
@@ -180,57 +201,62 @@ if __name__ == '__main__':
         test_task = Task(**sample_task_data)
 
         task_id = add_task(db_conn, test_task)
-        # ... (rest of existing __main__ test code) ...
         if task_id:
+            # ... (existing task tests remain here) ...
             print(f"Added task with ID: {task_id}")
-            retrieved_task = get_task(db_conn, task_id)
-            if retrieved_task:
-                print(f"Retrieved task: {retrieved_task.title}, Due: {retrieved_task.due_date}, Status: {retrieved_task.status}, Last Reset: {retrieved_task.last_reset_date}")
-            retrieved_task.status = "Completed"
-            retrieved_task.due_date = None
-            if update_task(db_conn, retrieved_task):
-                print(f"Updated task {task_id}")
-                updated_retrieved_task = get_task(db_conn, task_id)
-                if updated_retrieved_task:
-                     print(f"After update: {updated_retrieved_task.title}, Due: {updated_retrieved_task.due_date}, Status: {updated_retrieved_task.status}")
-            all_tasks = get_all_tasks(db_conn)
-            print(f"Total tasks: {len(all_tasks)}")
-            for t_item in all_tasks: # renamed t to t_item to avoid conflict with datetime.time
-                print(f"- {t_item.title} (ID: {t_item.id}, Status: {t_item.status}, Due: {t_item.due_date})")
+            # ...
 
-        print("\nTesting timeslot overlap function:")
+        # Test check_timeslot_overlap function (existing tests)
+        print("\n--- Testing check_timeslot_overlap ---")
         dt1_start = datetime.datetime(2024, 1, 1, 10, 0, 0)
         dt1_end   = datetime.datetime(2024, 1, 1, 11, 0, 0)
         dt2_start = datetime.datetime(2024, 1, 1, 10, 30, 0)
         dt2_end   = datetime.datetime(2024, 1, 1, 11, 30, 0)
         dt3_start = datetime.datetime(2024, 1, 1, 12, 0, 0)
         dt3_end   = datetime.datetime(2024, 1, 1, 13, 0, 0)
-        print(f"DT Overlap 1: {check_timeslot_overlap(dt1_start, dt1_end, dt2_start, dt2_end)}") # True
-        print(f"DT No Overlap 1: {check_timeslot_overlap(dt1_start, dt1_end, dt3_start, dt3_end)}") # False
+        dt4_start = datetime.datetime(2024, 1, 1, 9, 0, 0)
+        dt4_end   = datetime.datetime(2024, 1, 1, 12, 0, 0)
+        dt5_start = datetime.datetime(2024, 1, 1, 10, 0, 0)
+        dt5_end   = datetime.datetime(2024, 1, 1, 11, 0, 0)
+        dt6_start = datetime.datetime(2024, 1, 1, 11, 0, 0)
+        dt6_end   = datetime.datetime(2024, 1, 1, 12, 0, 0)
+        print(f"Interval 1: {dt1_start} - {dt1_end}")
+        print(f"Interval 2 (overlaps): {dt2_start} - {dt2_end} -> Overlap? {check_timeslot_overlap(dt1_start, dt1_end, dt2_start, dt2_end)}")
+        print(f"Interval 3 (no overlap): {dt3_start} - {dt3_end} -> Overlap? {check_timeslot_overlap(dt1_start, dt1_end, dt3_start, dt3_end)}")
+        print(f"Interval 4 (contains 1): {dt4_start} - {dt4_end} -> Overlap? {check_timeslot_overlap(dt1_start, dt1_end, dt4_start, dt4_end)}")
+        print(f"Interval 5 (same as 1): {dt5_start} - {dt5_end} -> Overlap? {check_timeslot_overlap(dt1_start, dt1_end, dt5_start, dt5_end)}")
+        print(f"Interval 6 (adjacent to 1): {dt6_start} - {dt6_end} -> Overlap? {check_timeslot_overlap(dt1_start, dt1_end, dt6_start, dt6_end)}")
+        print(f"Invalid interval (end before start): Overlap? {check_timeslot_overlap(dt1_end, dt1_start, dt2_start, dt2_end)}")
+        print(f"Non-datetime input: Overlap? {check_timeslot_overlap(dt1_start, dt1_end, 'not-a-datetime', dt2_end)}")
 
-        print("\nTesting time_only_overlap function:")
-        t1_start = time(10, 0, 0)
-        t1_end   = time(12, 0, 0)
-        # Simple overlap
-        t2_start = time(11, 0, 0)
-        t2_end   = time(13, 0, 0)
-        print(f"Time Overlap (10-12 vs 11-13): {check_time_only_overlap(t1_start, t1_end, t2_start, t2_end)}") # True
-        # No overlap
-        t3_start = time(13, 0, 0)
-        t3_end   = time(14, 0, 0)
-        print(f"Time No Overlap (10-12 vs 13-14): {check_time_only_overlap(t1_start, t1_end, t3_start, t3_end)}") # False
-        # Adjacent
-        t4_start = time(12, 0, 0)
-        t4_end   = time(13, 0, 0)
-        print(f"Time Adjacent (10-12 vs 12-13): {check_time_only_overlap(t1_start, t1_end, t4_start, t4_end)}") # False
-        # Contained
-        t5_start = time(9, 0, 0)
-        t5_end   = time(14, 0, 0)
-        print(f"Time Contained (10-12 within 9-14): {check_time_only_overlap(t1_start, t1_end, t5_start, t5_end)}") # True (t1 is contained in t5)
-        # Invalid interval
-        print(f"Time Invalid Interval (12-10 vs 11-13): {check_time_only_overlap(t1_end, t1_start, t2_start, t2_end)}") # False
-        # Non-time input
-        print(f"Time Non-Time Input: {check_time_only_overlap(t1_start, t1_end, 'invalid', t2_end)}") # False
+        # Test new check_time_only_overlap function
+        print("\n--- Testing check_time_only_overlap (Handles Midnight Crossings) ---")
+        t = datetime.time # Alias for convenience
+        # Non-crossing cases
+        print(f"T1 (10-12) vs (11-13) Overlap: {check_time_only_overlap(t(10), t(12), t(11), t(13))}") # Expected: True
+        print(f"T2 (10-12) vs (12-13) No Overlap (Adj): {check_time_only_overlap(t(10), t(12), t(12), t(13))}") # Expected: False
+        print(f"T3 (10-12) vs (13-14) No Overlap: {check_time_only_overlap(t(10), t(12), t(13), t(14))}") # Expected: False
+        print(f"T_Contained (10-14) vs (11-12) Overlap: {check_time_only_overlap(t(10),t(14), t(11),t(12))}") # Expected: True
+        print(f"T_Identical (10-12) vs (10-12) Overlap: {check_time_only_overlap(t(10),t(12), t(10),t(12))}") # Expected: True
+
+        # Crossing midnight cases
+        # ct1: 23:00 to 01:00 (next day) | ct2: 00:00 to 02:00 (overlaps second part of ct1)
+        print(f"T4 (23-01) vs (00-02) Overlap: {check_time_only_overlap(t(23,0), t(1,0), t(0,0), t(2,0))}") # Expected: True
+        # ct1: 23:00 to 01:00 | ct2: 22:00 to 00:00 (overlaps first part of ct1)
+        print(f"T5 (23-01) vs (22-00) Overlap: {check_time_only_overlap(t(23,0), t(1,0), t(22,0), t(0,0))}") # Expected: True
+        # ct1: 22:00 to 02:00 | ct2: 23:00 to 01:00 (ct2 contained in ct1, both cross)
+        print(f"T6 (22-02) vs (23-01) Overlap (Both Cross): {check_time_only_overlap(t(22,0), t(2,0), t(23,0), t(1,0))}") # Expected: True
+        # ct1: 22:00 to 23:00 (No cross) | ct2: 23:00 to 01:00 (Cross) -> No Overlap (adjacent)
+        print(f"T7 (22-23) vs (23-01) No Overlap (Adj): {check_time_only_overlap(t(22,0), t(23,0), t(23,0), t(1,0))}") # Expected: False
+        # ct1: 02:00 to 03:00 (No cross) | ct2: 23:00 to 01:00 (Cross) -> No Overlap
+        print(f"T8 (02-03) vs (23-01) No Overlap: {check_time_only_overlap(t(2,0), t(3,0), t(23,0), t(1,0))}") # Expected: False
+        # ct1: 00:00 to 02:00 (No cross) | ct2: 23:00 to 01:00 (Cross, overlaps with ct1's end)
+        print(f"T9 (00-02) vs (23-01) Overlap: {check_time_only_overlap(t(0,0), t(2,0), t(23,0), t(1,0))}") # Expected: True
+
+        # Invalid intervals (start_time >= end_time for non-crossing)
+        print(f"T10 (12-10) vs (11-13) Invalid: {check_time_only_overlap(t(12,0), t(10,0), t(11,0), t(13,0))}") # Expected: False
+        # Type errors
+        print(f"T11 (10-12) vs ('invalid'-13) Type Error: {check_time_only_overlap(t(10,0), t(12,0), 'invalid', t(13,0))}") # Expected: False
 
         db_conn.close()
     else:
