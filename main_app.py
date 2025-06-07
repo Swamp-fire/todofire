@@ -667,6 +667,21 @@ class TaskManagerApp:
         finally:
             if conn: conn.close()
 
+    def _format_duration_display(self, total_minutes: int) -> str:
+        if total_minutes is None or total_minutes < 0:
+            return "-"
+        if total_minutes == 0:
+            return "-" # Consistent with previous plan to show "-" for 0m
+
+        hours = total_minutes // 60
+        minutes = total_minutes % 60
+
+        if hours > 0 and minutes > 0:
+            return f"{hours}h {minutes}m"
+        elif hours > 0:
+            return f"{hours}h"
+        else: # minutes > 0 (total_minutes > 0 implies minutes > 0 if hours == 0)
+            return f"{minutes}m"
 
     def refresh_task_list(self):
         if self.headless_mode:
@@ -987,19 +1002,3 @@ if __name__ == '__main__':
                      logger.info("Ensuring scheduler shutdown in main finally block (headless).")
                      app.scheduler.shutdown()
         logger.info("Application terminated.")
-
-    def _format_duration_display(self, total_minutes: int) -> str:
-        if total_minutes is None or total_minutes < 0: # Treat negative as invalid too
-            return "-"
-        if total_minutes == 0:
-            return "-" # Or "0m" if preferred for clarity
-
-        hours = total_minutes // 60
-        minutes = total_minutes % 60
-
-        if hours > 0 and minutes > 0:
-            return f"{hours}h {minutes}m"
-        elif hours > 0:
-            return f"{hours}h"
-        else: # minutes > 0
-            return f"{minutes}m"
