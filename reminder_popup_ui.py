@@ -12,18 +12,22 @@ class ReminderPopupUI(bs.Toplevel):
         self.task = task
         self.app_callbacks = app_callbacks
         self.after_id = None
+        self.is_expanded = False # For description toggle
+
+        self.width = 380
+        self.initial_height = 130
+        self.expanded_height = 280
 
         self.remaining_work_seconds = 0
         if self.task and self.task.duration and self.task.duration > 0:
             self.remaining_work_seconds = self.task.duration * 60
 
         self.title("Reminder!")
-        self.geometry("400x300")
+        self.geometry(f"{self.width}x{self.initial_height}")
         self.wm_attributes("-topmost", 1)
         self.resizable(False, False)
         self.protocol("WM_DELETE_WINDOW", self.skip_reminder)
 
-        # self.style = ttk.Style() # This line is now removed
         self._setup_ui()
 
         if self.remaining_work_seconds > 0:
@@ -45,31 +49,16 @@ class ReminderPopupUI(bs.Toplevel):
             logger.error(f"CRITICAL: Unexpected error initiating TTS from ReminderPopupUI: {e}", exc_info=True)
 
     def _setup_ui(self):
-        main_frame = bs.Frame(self, padding=15)
+        main_frame = bs.Frame(self, padding=(10,10,10,5)) # Less bottom padding for compact view
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         title_label = bs.Label(main_frame, text=self.task.title if self.task else "No Title",
-                               font=("Helvetica", 14, "bold"), anchor="center", padding=(0,0,0,10))
+                               font=("Helvetica", 14, "bold"), anchor="center", padding=(0,0,0,5))
         title_label.pack(fill=tk.X)
 
-        desc_frame = bs.Frame(main_frame)
-        desc_frame.pack(fill=tk.X, pady=(0,10))
-
-        description_text_widget = tk.Text(desc_frame, wrap=tk.WORD, height=4, relief=tk.FLAT,
-                                   borderwidth=0, highlightthickness=0, font=("Helvetica", 10))
-        desc_text_content = self.task.description if self.task and self.task.description else "No description."
-        description_text_widget.insert(tk.END, desc_text_content)
-
-        try:
-            bg_color = self.cget('background')
-            description_text_widget.config(state=tk.DISABLED, bg=bg_color)
-        except tk.TclError:
-            description_text_widget.config(state=tk.DISABLED, bg="SystemButtonFace")
-
-        description_text_widget.pack(fill=tk.X, expand=False)
-
+        # Duration/Countdown Frame (Visible in compact view)
         duration_display_frame = bs.Frame(main_frame)
-        duration_display_frame.pack(fill=tk.X, pady=(0, 15))
+        duration_display_frame.pack(fill=tk.X, pady=(0, 5)) # Pack before description and buttons
 
         if self.task and self.task.duration and self.task.duration > 0:
             static_duration_text_label = bs.Label(duration_display_frame, text="Work Session:", font=("Helvetica", 10))
@@ -91,18 +80,39 @@ class ReminderPopupUI(bs.Toplevel):
             no_duration_label = bs.Label(duration_display_frame, text="No specific work duration.", style="secondary.TLabel")
             no_duration_label.pack(side=tk.LEFT)
 
-        button_frame = bs.Frame(main_frame)
-        button_frame.pack(fill=tk.X, side=tk.BOTTOM, pady=(5,0))
+        # Description Frame (Initially not packed, packed by toggle_expand_popup)
+        self.desc_frame = bs.Frame(main_frame)
+        # self.desc_frame will be packed by toggle_expand_popup if needed.
 
-        self.skip_button = bs.Button(button_frame, text="Skip", command=self.skip_reminder, bootstyle="secondary", width=10)
+        self.description_text_widget = tk.Text(self.desc_frame, wrap=tk.WORD, height=5, relief=tk.FLAT,
+                                                borderwidth=0, highlightthickness=0, font=("Helvetica", 10))
+        desc_text_content = self.task.description if self.task and self.task.description else "No description."
+        self.description_text_widget.insert(tk.END, desc_text_content)
+
+        try:
+            bg_color = self.cget('background') # Get parent Toplevel background
+            self.description_text_widget.config(state=tk.DISABLED, bg=bg_color)
+        except tk.TclError: # Fallback for environments where cget might fail for Toplevel bg
+            self.description_text_widget.config(state=tk.DISABLED, bg="SystemButtonFace")
+        self.description_text_widget.pack(fill=tk.BOTH, expand=True)
+
+
+        # Button Frame (Store as self.button_frame_ref for toggle_expand_popup)
+        self.button_frame_ref = bs.Frame(main_frame)
+        self.button_frame_ref.pack(fill=tk.X, side=tk.BOTTOM, pady=(5,0)) # Ensure it's at the very bottom
+
+        self.expand_button = bs.Button(self.button_frame_ref, text="▼ More", command=self.toggle_expand_popup, style="info.Outline.TButton", width=8)
+        self.expand_button.pack(side=tk.LEFT, padx=(0,5))
+
+        # Action buttons packed to the right
+        self.skip_button = bs.Button(self.button_frame_ref, text="Skip ⏩", command=self.skip_reminder, style="secondary.TButton", width=8)
         self.skip_button.pack(side=tk.RIGHT, padx=(5,0))
 
-        self.complete_button = bs.Button(button_frame, text="Complete", command=self.complete_task, bootstyle="success", width=10)
+        self.complete_button = bs.Button(self.button_frame_ref, text="Done ✔️", command=self.complete_task, style="success.TButton", width=8)
         self.complete_button.pack(side=tk.RIGHT, padx=(5,0))
 
-        self.reschedule_button = bs.Button(button_frame, text="Reschedule", command=self.reschedule_task, bootstyle="warning", width=10)
-        self.reschedule_button.pack(side=tk.RIGHT, padx=(0,0))
-
+        self.reschedule_button = bs.Button(self.button_frame_ref, text="Later 🔄", command=self.reschedule_task, style="warning.TButton", width=8)
+        self.reschedule_button.pack(side=tk.RIGHT, padx=(0,0)) # No padx on the rightmost of this group
 
     def _update_countdown(self):
         if self.remaining_work_seconds > 0:
@@ -182,6 +192,20 @@ class ReminderPopupUI(bs.Toplevel):
             except Exception as e:
                 logger.error(f"Popup: Error calling remove_from_active callback: {e}", exc_info=True)
         self.destroy()
+
+    def toggle_expand_popup(self):
+        self.is_expanded = not self.is_expanded
+        if self.is_expanded:
+            # Ensure desc_frame is packed before button_frame_ref
+            # button_frame_ref must be stored in _setup_ui
+            if hasattr(self, 'desc_frame') and hasattr(self, 'button_frame_ref'):
+                 self.desc_frame.pack(fill=tk.BOTH, expand=True, pady=(5,5), before=self.button_frame_ref)
+            self.geometry(f"{self.width}x{self.expanded_height}")
+            if hasattr(self, 'expand_button'): self.expand_button.config(text="▲ Less")
+        else: # Collapsing
+            if hasattr(self, 'desc_frame'): self.desc_frame.pack_forget()
+            self.geometry(f"{self.width}x{self.initial_height}")
+            if hasattr(self, 'expand_button'): self.expand_button.config(text="▼ More")
 
 # Example usage
 if __name__ == '__main__':

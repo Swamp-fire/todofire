@@ -37,6 +37,7 @@ class TaskManagerApp:
         self.reminder_queue = queue.Queue()
         self.scheduler = None
         self.priority_map_display = {1: "Low", 2: "Medium", 3: "High"}
+        self.tree_columns = ("id", "title", "status", "priority", "due_date", "repetition", "duration_display", "category")
 
         if not self.headless_mode and self.root:
             self._setup_ui()
@@ -178,22 +179,36 @@ class TaskManagerApp:
         tree_frame.rowconfigure(0, weight=1)
         tree_frame.columnconfigure(0, weight=1)
 
-        columns = ("id", "title", "status", "priority", "due_date", "category", "creation_date")
-        self.task_tree = ttk.Treeview(tree_frame, columns=columns, show="headings", selectmode="browse")
+        # Use self.tree_columns defined in __init__
+        self.task_tree = ttk.Treeview(tree_frame, columns=self.tree_columns, show="headings", selectmode="browse")
+
+        # Configure columns based on self.tree_columns
+        # Order: ("id", "title", "status", "priority", "due_date", "repetition", "duration_display", "category")
+
         self.task_tree.heading("id", text="ID", anchor='w')
-        self.task_tree.column("id", width=30, stretch=False)
+        self.task_tree.column("id", width=40, minwidth=30, stretch=tk.NO)
+
         self.task_tree.heading("title", text="Title", anchor='w')
-        self.task_tree.column("title", width=150, stretch=True)
+        self.task_tree.column("title", width=200, minwidth=100, stretch=tk.YES)
+
         self.task_tree.heading("status", text="Status", anchor='w')
-        self.task_tree.column("status", width=80, stretch=False)
+        self.task_tree.column("status", width=80, minwidth=70, stretch=tk.NO)
+
         self.task_tree.heading("priority", text="Priority", anchor='w')
-        self.task_tree.column("priority", width=70, stretch=False)
+        self.task_tree.column("priority", width=70, minwidth=60, stretch=tk.NO)
+
         self.task_tree.heading("due_date", text="Due Date", anchor='w')
-        self.task_tree.column("due_date", width=130, stretch=False)
+        self.task_tree.column("due_date", width=120, minwidth=100, stretch=tk.NO)
+
+        self.task_tree.heading("repetition", text="Repeats", anchor='w')
+        self.task_tree.column("repetition", width=80, minwidth=70, stretch=tk.NO)
+
+        self.task_tree.heading("duration_display", text="Work Time", anchor='w')
+        self.task_tree.column("duration_display", width=80, minwidth=70, stretch=tk.NO)
+
         self.task_tree.heading("category", text="Category", anchor='w')
-        self.task_tree.column("category", width=90, stretch=False)
-        self.task_tree.heading("creation_date", text="Created On", anchor='w')
-        self.task_tree.column("creation_date", width=130, stretch=False)
+        self.task_tree.column("category", width=100, minwidth=80, stretch=tk.NO)
+        # "creation_date" column configuration is removed.
 
         vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.task_tree.yview)
         self.task_tree.configure(yscrollcommand=vsb.set)
@@ -682,10 +697,22 @@ class TaskManagerApp:
                         dt_obj = datetime.datetime.fromisoformat(task.due_date)
                         display_due_date = dt_obj.strftime("%Y-%m-%d %H:%M")
                     except ValueError:
-                        display_due_date = task.due_date
+                        display_due_date = task.due_date # Show raw if format error
+
+                repetition_display = task.repetition if task.repetition and task.repetition.strip().lower() != 'none' and task.repetition.strip() else "One-Time"
+                duration_str = self._format_duration_display(task.duration)
+
+                # Order must match self.tree_columns:
+                # ("id", "title", "status", "priority", "due_date", "repetition", "duration_display", "category")
                 values_to_insert = (
-                    task.id, task.title, task.status, priority_display_val,
-                    display_due_date, task.category, task.creation_date
+                    task.id,
+                    task.title,
+                    task.status,
+                    priority_display_val,
+                    display_due_date,
+                    repetition_display,
+                    duration_str,
+                    task.category
                 )
                 self.task_tree.insert("", tk.END, iid=str(task.id), values=values_to_insert)
             logger.info(f"Task list refreshed. {len(tasks)} tasks loaded.")
@@ -960,3 +987,19 @@ if __name__ == '__main__':
                      logger.info("Ensuring scheduler shutdown in main finally block (headless).")
                      app.scheduler.shutdown()
         logger.info("Application terminated.")
+
+    def _format_duration_display(self, total_minutes: int) -> str:
+        if total_minutes is None or total_minutes < 0: # Treat negative as invalid too
+            return "-"
+        if total_minutes == 0:
+            return "-" # Or "0m" if preferred for clarity
+
+        hours = total_minutes // 60
+        minutes = total_minutes % 60
+
+        if hours > 0 and minutes > 0:
+            return f"{hours}h {minutes}m"
+        elif hours > 0:
+            return f"{hours}h"
+        else: # minutes > 0
+            return f"{minutes}m"
