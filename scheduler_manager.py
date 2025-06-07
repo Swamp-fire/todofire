@@ -133,30 +133,50 @@ def schedule_task_reminders(scheduler, reminder_queue):
                          try: scheduler.remove_job(job_id)
                          except Exception as e_rem: logger.error(f"Error removing past job {job_id}: {e_rem}", exc_info=True)
                     continue
+                # For One-Time Tasks
                 trigger_details = {'trigger': 'date', 'run_date': due_datetime}
+                logger.debug(f"Scheduling ONE-TIME job ID {job_id} for task '{task.title}' (TaskID: {task.id}) with run_date: {due_datetime.isoformat()}")
             else:
-                cron_params = {'hour': due_datetime.hour, 'minute': due_datetime.minute,
-                               'start_date': datetime.datetime.combine(datetime.date.today(), datetime.time.min) }
-                if due_datetime < now and task.repetition == 'Daily':
-                     cron_params['start_date'] = datetime.datetime.combine(now.date() + datetime.timedelta(days=1), datetime.time.min)
+                # For Repeating Tasks
+                # Base cron parameters: hour and minute are always from due_datetime
+                base_cron_params = {'hour': due_datetime.hour, 'minute': due_datetime.minute}
+
+                # Correctly set start_date to the task's first due datetime
+                trigger_details = {'trigger': 'cron', 'start_date': due_datetime, **base_cron_params}
 
                 if task.repetition == 'Daily':
-                    trigger_details = {'trigger': 'cron', **cron_params}
+                    # No additional day/month parameters needed for daily beyond start_date logic
+                    pass
                 elif task.repetition == 'Weekly':
-                    trigger_details = {'trigger': 'cron', 'day_of_week': due_datetime.weekday(), **cron_params}
+                    trigger_details['day_of_week'] = due_datetime.weekday()
                 elif task.repetition == 'Monthly':
-                    trigger_details = {'trigger': 'cron', 'day': due_datetime.day, **cron_params}
+                    trigger_details['day'] = due_datetime.day
                 elif task.repetition == 'Yearly':
-                    trigger_details = {'trigger': 'cron', 'month': due_datetime.month, 'day': due_datetime.day, **cron_params}
+                    trigger_details['month'] = due_datetime.month
+                    trigger_details['day'] = due_datetime.day
                 else:
                     logger.warning(f"Unknown repetition '{task.repetition}' for Task '{task.title}' (ID: {task.id}). Skipping reminder.")
                     if job_id in active_reminder_job_ids: active_reminder_job_ids.remove(job_id)
                     skipped_no_trigger +=1
+                    trigger_details = None # Ensure it's None so job isn't scheduled
                     continue
 
-            if trigger_details:
+                if trigger_details: # Log before adding job if trigger_details are valid
+                    cron_params_str_list = []
+                    # Sort keys for consistent log output, excluding 'trigger' itself from the list of params
+                    for k, v_param in sorted(trigger_details.items()):
+                        if k == 'trigger': continue
+                        if isinstance(v_param, datetime.datetime):
+                            cron_params_str_list.append(f"{k}={v_param.isoformat()}")
+                        else:
+                            cron_params_str_list.append(f"{k}={v_param}")
+                    cron_params_log = ", ".join(cron_params_str_list)
+                    logger.debug(f"Scheduling CRON job ID {job_id} for task '{task.title}' (TaskID: {task.id}). Trigger: cron, Params: {{{cron_params_log}}}")
+
+            if trigger_details: # This check is now applicable for both one-time and repeating
                 job_args = [task.id, task.title, reminder_queue]
-                logger.debug(f"Attempting to add/update job: ID='{job_id}', Trigger='{trigger_details.get('trigger')}', Params={trigger_details}, Args={job_args[:2]}..Q)")
+                # General logging before add_job call is now more specific above.
+                # A generic "About to add/update" could be here if desired, but the specific ones are better.
                 try:
                     scheduler.add_job(
                         trigger_reminder_action,
@@ -215,15 +235,16 @@ def initialize_scheduler(reminder_queue):
     scheduler = BackgroundScheduler(daemon=True)
     job_repetition_id = 'job_check_repetition'
     job_rescheduler_id = 'job_rescheduler_reminders'
-    interval_reschedule_minutes = 5 # RESTORED Original value (was 15, then 5, then 20s for test)
+    interval_reschedule_minutes = 5 # Reverted to production value
 
     scheduler.add_job(check_repeating_tasks, 'interval', hours=1, id=job_repetition_id)
-    logger.info(f"Added interval job for 'check_repeating_tasks': ID='{job_repetition_id}', Hours=1")
+    logger.info(f"Job '{job_repetition_id}' (check_repeating_tasks) configured to run every 1 hour.") # Clarified log
 
     try:
         scheduler.add_job(schedule_task_reminders, 'interval', minutes=interval_reschedule_minutes,
                           args=[scheduler, reminder_queue], id=job_rescheduler_id)
-        logger.info(f"Added interval job for 'schedule_task_reminders': ID='{job_rescheduler_id}', Minutes={interval_reschedule_minutes}")
+        # Removed the old generic log, adding the new specific one below
+        logger.info(f"Job '{job_rescheduler_id}' (schedule_task_reminders) configured to run every {interval_reschedule_minutes} minutes.")
 
         scheduler.start()
         logger.info("BackgroundScheduler initialized and started.")

@@ -397,8 +397,41 @@ class TaskManagerApp:
                                 logger.warning(f"Invalid date format for existing task ID {existing_task.id} ('{existing_task.due_date}'). Skipping in conflict check.")
                                 continue
 
-                            if check_timeslot_overlap(current_task_start_dt, current_task_end_dt,
-                                                                   existing_task_start_dt, existing_task_end_dt):
+                            # Get repetitions for conditional logging
+                            current_task_repetition_for_log = repetition # from form
+                            existing_task_repetition_for_log = existing_task.repetition
+
+                            log_daily_conflict_details = current_task_repetition_for_log == 'Daily' and \
+                                                         existing_task_repetition_for_log == 'Daily'
+
+                            if log_daily_conflict_details:
+                                ct_start_time = current_task_start_dt.time()
+                                # task_duration_total_minutes is defined earlier in save_task_action
+                                ct_end_time_for_log = (current_task_start_dt + timedelta(minutes=task_duration_total_minutes)).time()
+
+                                et_start_time = existing_task_start_dt.time()
+                                # existing_task.duration is available
+                                et_end_time_for_log = (existing_task_start_dt + timedelta(minutes=existing_task.duration)).time()
+
+                                logger.debug(f"DAILY_CONFLICT_CHECK for Current Task '{title_value}' (ID: {self.currently_editing_task_id if self.currently_editing_task_id else 'New'}) vs Existing '{existing_task.title}' (ID: {existing_task.id}):")
+                                logger.debug(f"  Current Task Time Slot (for check_time_only_overlap): {ct_start_time} - {ct_end_time_for_log}")
+                                logger.debug(f"  Existing Task Time Slot (for check_time_only_overlap): {et_start_time} - {et_end_time_for_log}")
+
+                            # Actual conflict check call
+                            conflict_this_pair = check_timeslot_overlap(
+                                current_task_start_dt, current_task_end_dt,
+                                existing_task_start_dt, existing_task_end_dt
+                            )
+
+                            if log_daily_conflict_details:
+                                # This logs the result of the comprehensive check_timeslot_overlap,
+                                # which internally handles the time-only aspect for daily tasks.
+                                logger.debug(f"  check_timeslot_overlap (which considers time_only for Daily) returned: {conflict_this_pair}")
+
+                            if conflict_this_pair:
+                                if log_daily_conflict_details:
+                                    logger.debug(f"  is_potential_conflict after Daily check: True")
+
                                 conflict_msg = (f"Task '{title_value}' ({current_task_start_dt.strftime('%H:%M')} - {current_task_end_dt.strftime('%H:%M')}) "
                                                 f"conflicts with '{existing_task.title}' (due: {existing_task_start_dt.strftime('%Y-%m-%d %H:%M')}, "
                                                 f"duration: {existing_task.duration} min). Please choose a different time or duration.")
@@ -409,6 +442,8 @@ class TaskManagerApp:
                                     logger.error(f"HEADLESS_SAVE_ERROR: {conflict_msg}")
                                 conflict_found = True
                                 break
+                            elif log_daily_conflict_details: # Only log if it was a daily check and no conflict
+                                logger.debug(f"  is_potential_conflict after Daily check: False")
 
                         if conflict_found:
                             if conn_check: conn_check.close() # Close check connection before returning
