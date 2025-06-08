@@ -19,8 +19,8 @@ class ReminderPopupUI(bs.Toplevel):
         self._drag_offset_y = 0 # For dragging
 
         self.width = 380
-        self.initial_height = 100 # Adjusted
-        self.expanded_height = 230 # Adjusted
+        self.initial_height = 90  # Further Adjusted
+        self.expanded_height = 215 # Further Adjusted
 
         self.remaining_work_seconds = 0
         if self.task and self.task.duration and self.task.duration > 0:
@@ -58,25 +58,23 @@ class ReminderPopupUI(bs.Toplevel):
             logger.error(f"CRITICAL: Unexpected error initiating TTS from ReminderPopupUI: {e}", exc_info=True)
 
     def _setup_ui(self):
-        main_frame = bs.Frame(self, padding=(10,5,10,5))
+        main_frame = bs.Frame(self, padding=(10,3,10,3)) # Adjusted padding
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # Top content frame for title and duration/countdown
         top_content_frame = bs.Frame(main_frame)
-        top_content_frame.pack(fill=tk.X, pady=(0, 3)) # Adjusted pady
+        top_content_frame.pack(fill=tk.X, pady=(0, 2)) # Adjusted pady
 
         # Task Title Label (in top_content_frame, packed left)
         title_label = bs.Label(top_content_frame, text=self.task.title if self.task else "No Title",
-                               font=("Helvetica", 14, "bold"), anchor="w", # anchor west
-                               wraplength=self.width - 80, justify=tk.LEFT) # wraplength, justify left
+                               font=("Helvetica", 14, "bold"), anchor="w",
+                               wraplength=self.width - 80, justify=tk.LEFT, padding=(0,0,0,2)) # Adjusted padding
         title_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
 
         # Duration/Countdown Frame (in top_content_frame, packed right)
         duration_display_frame = bs.Frame(top_content_frame)
         # Removed static_duration_text_label
-        # Pack it to the right of top_content_frame
-        duration_display_frame.pack(side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0))
-
+        duration_display_frame.pack(side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0)) # No change to its internal padding needed here
 
         if self.task and self.task.duration and self.task.duration > 0:
             # static_duration_text_label removed
@@ -115,22 +113,22 @@ class ReminderPopupUI(bs.Toplevel):
 
         # Button Frame (Store as self.button_frame_ref for toggle_expand_popup)
         self.button_frame_ref = bs.Frame(main_frame)
-        self.button_frame_ref.pack(fill=tk.X, side=tk.BOTTOM, pady=(3,0)) # Adjusted pady
+        self.button_frame_ref.pack(fill=tk.X, side=tk.BOTTOM, pady=(3,2)) # Adjusted pady
 
-        self.expand_button = bs.Button(self.button_frame_ref, text="▼", command=self.toggle_expand_popup, style="info.Outline.TButton", width=3)
+        self.expand_button = bs.Button(self.button_frame_ref, text="▼", command=self.toggle_expand_popup, style="info.Round.TButton", width=3)
         self.expand_button.pack(side=tk.LEFT, padx=(0,5))
         ToolTip(self.expand_button, text="More Info")
 
         # Action buttons packed to the right (so add them in reverse visual order)
-        self.skip_button = bs.Button(self.button_frame_ref, text="⏩", command=self.skip_reminder, style="secondary.TButton", width=3)
+        self.skip_button = bs.Button(self.button_frame_ref, text="⏩", command=self.skip_reminder, style="secondary.Round.TButton", width=3) # Changed style
         self.skip_button.pack(side=tk.RIGHT, padx=(5,0))
         ToolTip(self.skip_button, text="Skip Reminder")
 
-        self.complete_button = bs.Button(self.button_frame_ref, text="✔️", command=self.complete_task, style="success.TButton", width=3)
+        self.complete_button = bs.Button(self.button_frame_ref, text="✔️", command=self.complete_task, style="secondary.Round.TButton", width=3) # Changed style
         self.complete_button.pack(side=tk.RIGHT, padx=(5,0))
         ToolTip(self.complete_button, text="Mark as Complete")
 
-        self.reschedule_button = bs.Button(self.button_frame_ref, text="🔄", command=self.reschedule_task, style="warning.TButton", width=3)
+        self.reschedule_button = bs.Button(self.button_frame_ref, text="🔄", command=self.reschedule_task, style="secondary.Round.TButton", width=3) # Changed style
         self.reschedule_button.pack(side=tk.RIGHT, padx=(0,0))
         ToolTip(self.reschedule_button, text="Reschedule (+15m)")
 
@@ -219,16 +217,16 @@ class ReminderPopupUI(bs.Toplevel):
             # Ensure desc_frame is packed before button_frame_ref
             # button_frame_ref must be stored in _setup_ui
             if hasattr(self, 'desc_frame') and hasattr(self, 'button_frame_ref'):
-                 self.desc_frame.pack(fill=tk.BOTH, expand=True, pady=(3,3), before=self.button_frame_ref) # Adjusted pady
+                 self.desc_frame.pack(fill=tk.BOTH, expand=True, pady=(3,3), before=self.button_frame_ref) # pady already minimal
             self.geometry(f"{self.width}x{self.expanded_height}")
             if hasattr(self, 'expand_button'):
-                self.expand_button.config(text="▲ Less")
+                self.expand_button.config(text="▲") # Changed
                 ToolTip(self.expand_button, text="Less Info")
         else: # Collapsing
             if hasattr(self, 'desc_frame'): self.desc_frame.pack_forget()
             self.geometry(f"{self.width}x{self.initial_height}")
             if hasattr(self, 'expand_button'):
-                self.expand_button.config(text="▼ More")
+                self.expand_button.config(text="▼") # Changed
                 ToolTip(self.expand_button, text="More Info")
 
     def _on_mouse_press(self, event):
