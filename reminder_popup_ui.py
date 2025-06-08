@@ -58,22 +58,28 @@ class ReminderPopupUI(bs.Toplevel):
             logger.error(f"CRITICAL: Unexpected error initiating TTS from ReminderPopupUI: {e}", exc_info=True)
 
     def _setup_ui(self):
-        main_frame = bs.Frame(self, padding=(10,5,10,5)) # Adjusted padding
+        main_frame = bs.Frame(self, padding=(10,5,10,5))
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        title_label = bs.Label(main_frame, text=self.task.title if self.task else "No Title",
-                               font=("Helvetica", 14, "bold"), anchor="center",
-                               padding=(0,0,0,3), wraplength=self.width-30, justify=tk.CENTER) # Adjusted padding and added wraplength
-        title_label.pack(fill=tk.X)
+        # Top content frame for title and duration/countdown
+        top_content_frame = bs.Frame(main_frame)
+        top_content_frame.pack(fill=tk.X, pady=(0, 3)) # Adjusted pady
 
-        # Duration/Countdown Frame (Visible in compact view)
-        duration_display_frame = bs.Frame(main_frame)
-        duration_display_frame.pack(fill=tk.X, pady=(0, 3)) # Adjusted pady
+        # Task Title Label (in top_content_frame, packed left)
+        title_label = bs.Label(top_content_frame, text=self.task.title if self.task else "No Title",
+                               font=("Helvetica", 14, "bold"), anchor="w", # anchor west
+                               wraplength=self.width - 80, justify=tk.LEFT) # wraplength, justify left
+        title_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
+
+        # Duration/Countdown Frame (in top_content_frame, packed right)
+        duration_display_frame = bs.Frame(top_content_frame)
+        # Removed static_duration_text_label
+        # Pack it to the right of top_content_frame
+        duration_display_frame.pack(side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0))
+
 
         if self.task and self.task.duration and self.task.duration > 0:
-            static_duration_text_label = bs.Label(duration_display_frame, text="Work Session:", font=("Helvetica", 10))
-            static_duration_text_label.pack(side=tk.LEFT, padx=(0,5))
-
+            # static_duration_text_label removed
             hours = self.remaining_work_seconds // 3600
             minutes = (self.remaining_work_seconds % 3600) // 60
             seconds = self.remaining_work_seconds % 60

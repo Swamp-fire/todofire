@@ -418,10 +418,10 @@ class TaskManagerApp:
                                 logger.warning(f"Invalid date format for existing task ID {existing_task.id} ('{existing_task.due_date}'). Skipping in conflict check.")
                                 continue
 
-                            # Corrected conflict checking logic starts here
+                            # Emergency Plan Step 2: Corrected Conflict Check Logic
                             is_potential_conflict = False # Initialize for this pair comparison
-                            # current_task_repetition is already defined from form input
-                            existing_task_repetition = existing_task.repetition if existing_task.repetition else 'None'
+                            # current_task_repetition is already defined from form input ('repetition' aliased to current_task_repetition earlier)
+                            existing_task_repetition = existing_task.repetition if existing_task.repetition else 'None' # Normalize
 
                             if current_task_repetition == existing_task_repetition:
                                 logger.debug(f"Conflict Check: Same repetition type ('{current_task_repetition}') "
@@ -439,15 +439,15 @@ class TaskManagerApp:
                                         is_potential_conflict = True
 
                                 else: # Handles 'Daily', 'Weekly', 'Monthly', 'Yearly' all using check_time_only_overlap
+                                    # Prepare time components for check_time_only_overlap
                                     ct_start_time = ct_start_dt.time()
                                     ct_end_time_val = (ct_start_dt + timedelta(minutes=task_duration_total_minutes)).time()
                                     et_start_time = et_start_dt.time()
                                     et_end_time_val = (et_start_dt + timedelta(minutes=existing_task.duration)).time()
 
-                                    specific_match_criteria = False # Renamed from specific_match for clarity
-                                    # Determine if date parts match for repeating tasks other than Daily
+                                    specific_match_criteria = False # Corrected variable name
                                     if current_task_repetition == 'Daily':
-                                        specific_match_criteria = True
+                                        specific_match_criteria = True # Always check time for daily
                                     elif current_task_repetition == 'Weekly':
                                         if ct_start_dt.weekday() == et_start_dt.weekday():
                                             specific_match_criteria = True
@@ -460,7 +460,7 @@ class TaskManagerApp:
 
                                     if specific_match_criteria:
                                         logger.debug(f"  {current_task_repetition.upper()}_VS_{current_task_repetition.upper()} Check for Current Task '{title_value}' vs Existing '{existing_task.title}':")
-                                        if current_task_repetition != 'Daily':
+                                        if current_task_repetition != 'Daily': # Log date part match for non-Daily repeating
                                             logger.debug(f"    Date parts match criteria (e.g., weekday, day of month).")
                                         logger.debug(f"    Current Task Time Slot (for check_time_only_overlap): {ct_start_time.isoformat()} - {ct_end_time_val.isoformat()}")
                                         logger.debug(f"    Existing Task Time Slot (for check_time_only_overlap): {et_start_time.isoformat()} - {et_end_time_val.isoformat()}")
@@ -472,7 +472,7 @@ class TaskManagerApp:
                                         logger.debug(f"    check_time_only_overlap returned: {time_overlap_result}")
                                         if time_overlap_result:
                                             is_potential_conflict = True
-                                    else: # For Weekly, Monthly, Yearly if date parts don't match
+                                    else:
                                          logger.debug(f"  {current_task_repetition.upper()}_VS_{current_task_repetition.upper()} Check for Current Task '{title_value}' vs Existing '{existing_task.title}': Date parts do not match criteria. No time overlap check needed.")
 
                                 logger.debug(f"  is_potential_conflict after {current_task_repetition} check: {is_potential_conflict}")
@@ -483,7 +483,8 @@ class TaskManagerApp:
                                              f"No overlap check performed as per rules.")
                                 is_potential_conflict = False # Explicitly ensure it's false
 
-                            if is_potential_conflict: # This is the flag for the current PAIR of tasks
+                            if is_potential_conflict:
+                                logger.warning(f"Task conflict detected: Current task '{title_value}' ({current_task_repetition}) overlaps with existing task '{existing_task.title}' (ID: {existing_task.id}, Rep: {existing_task_repetition}).")
                                 conflict_msg = (f"Task '{title_value}' ({ct_start_dt.strftime('%Y-%m-%d %H:%M')}, Rep: {current_task_repetition}) "
                                                 f"conflicts with existing task '{existing_task.title}' (ID: {existing_task.id}, Due: {et_start_dt.strftime('%Y-%m-%d %H:%M')}, Rep: {existing_task_repetition}, "
                                                 f"duration: {existing_task.duration} min). Please choose a different time, duration, or repetition.")
@@ -951,7 +952,7 @@ if __name__ == '__main__':
     app = None
     try:
         logger.info("Application starting...")
-        root = bs.Window(themename="litera")
+        root = bs.Window(themename="solar")
         logger.info("GUI mode detected. Initializing TaskManagerApp for GUI.")
         app = TaskManagerApp(root_window=root, headless_mode=False)
         logger.info("Starting Tkinter mainloop...")
