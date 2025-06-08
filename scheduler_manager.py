@@ -235,16 +235,15 @@ def initialize_scheduler(reminder_queue):
     scheduler = BackgroundScheduler(daemon=True)
     job_repetition_id = 'job_check_repetition'
     job_rescheduler_id = 'job_rescheduler_reminders'
-    # interval_reschedule_minutes = 5 # Original value
-    interval_reschedule_seconds = 20 # TEMPORARY FOR THIS TEST
+    interval_reschedule_minutes = 5 # Production value
 
     scheduler.add_job(check_repeating_tasks, 'interval', hours=1, id=job_repetition_id)
-    logger.info(f"Job '{job_repetition_id}' (check_repeating_tasks) configured to run every 1 hour.")
+    logger.info(f"Job '{job_repetition_id}' (target: check_repeating_tasks) configured with interval: 1 hour.") # Standardized log
 
     try:
-        scheduler.add_job(schedule_task_reminders, 'interval', seconds=interval_reschedule_seconds, # Using seconds for test
+        scheduler.add_job(schedule_task_reminders, 'interval', minutes=interval_reschedule_minutes,
                           args=[scheduler, reminder_queue], id=job_rescheduler_id)
-        logger.info(f"Job '{job_rescheduler_id}' (schedule_task_reminders) TEMPORARILY configured to run every {interval_reschedule_seconds} seconds for this test.") # Updated log
+        logger.info(f"Job '{job_rescheduler_id}' (target: schedule_task_reminders) configured with interval: {interval_reschedule_minutes} minutes.") # Standardized log
 
         scheduler.start()
         logger.info("BackgroundScheduler initialized and started.")
