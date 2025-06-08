@@ -113,23 +113,24 @@ class ReminderPopupUI(bs.Toplevel):
 
         # Button Frame (Store as self.button_frame_ref for toggle_expand_popup)
         self.button_frame_ref = bs.Frame(main_frame)
-        self.button_frame_ref.pack(fill=tk.X, side=tk.BOTTOM, pady=(3,2)) # Adjusted pady
+        self.button_frame_ref.pack(fill=tk.X, side=tk.BOTTOM, pady=(3,2))
+        # self.button_frame_ref.configure(bootstyle="danger") # Reverted debugging style
 
-        self.expand_button = bs.Button(self.button_frame_ref, text="▼", command=self.toggle_expand_popup, style="info.Round.TButton", width=3)
-        self.expand_button.pack(side=tk.LEFT, padx=(0,5))
+        self.expand_button = bs.Button(self.button_frame_ref, text="▼", command=self.toggle_expand_popup, style="info.Round.TButton") # Removed width
+        self.expand_button.pack(side=tk.LEFT, padx=2) # Adjusted padx
         ToolTip(self.expand_button, text="More Info")
 
         # Action buttons packed to the right (so add them in reverse visual order)
-        self.skip_button = bs.Button(self.button_frame_ref, text="⏩", command=self.skip_reminder, style="secondary.Round.TButton", width=3) # Changed style
-        self.skip_button.pack(side=tk.RIGHT, padx=(5,0))
+        self.skip_button = bs.Button(self.button_frame_ref, text="⏩", command=self.skip_reminder, style="secondary.Round.TButton") # Restored text and style, removed width
+        self.skip_button.pack(side=tk.RIGHT, padx=(2,0)) # Adjusted padx (0 for the very right edge)
         ToolTip(self.skip_button, text="Skip Reminder")
 
-        self.complete_button = bs.Button(self.button_frame_ref, text="✔️", command=self.complete_task, style="secondary.Round.TButton", width=3) # Changed style
-        self.complete_button.pack(side=tk.RIGHT, padx=(5,0))
+        self.complete_button = bs.Button(self.button_frame_ref, text="✔️", command=self.complete_task, style="secondary.Round.TButton") # Removed width
+        self.complete_button.pack(side=tk.RIGHT, padx=2) # Adjusted padx
         ToolTip(self.complete_button, text="Mark as Complete")
 
-        self.reschedule_button = bs.Button(self.button_frame_ref, text="🔄", command=self.reschedule_task, style="secondary.Round.TButton", width=3) # Changed style
-        self.reschedule_button.pack(side=tk.RIGHT, padx=(0,0))
+        self.reschedule_button = bs.Button(self.button_frame_ref, text="🔄", command=self.reschedule_task, style="secondary.Round.TButton") # Removed width
+        self.reschedule_button.pack(side=tk.RIGHT, padx=2) # Adjusted padx
         ToolTip(self.reschedule_button, text="Reschedule (+15m)")
 
     def _update_countdown(self):
