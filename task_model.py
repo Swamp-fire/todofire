@@ -9,7 +9,10 @@ class Task:
                  creation_date: str,
                  repetition: str,
                  priority: int,
-                 category: str):
+                 category: str,
+                 due_date: Union[str, None] = None,
+                 reminder_set: bool = False,
+                 status: str = "Pending"):
         self.id: int = id
         self.title: str = title
         self.description: str = description
@@ -18,3 +21,6 @@ class Task:
         self.repetition: str = repetition
         self.priority: int = priority
         self.category: str = category
+        self.due_date: Union[str, None] = due_date
+        self.reminder_set: bool = reminder_set
+        self.status: str = status  # e.g., "Pending", "Completed"

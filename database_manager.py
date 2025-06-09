@@ -26,7 +26,10 @@ def create_table(conn: sqlite3.Connection) -> None:
                             creation_date TEXT NOT NULL,
                             repetition TEXT,
                             priority INTEGER,
-                            category TEXT
+                            category TEXT,
+                            due_date TEXT,
+                            reminder_set INTEGER DEFAULT 0,
+                            status TEXT DEFAULT 'Pending'
                         );"""
     try:
         cursor = conn.cursor()
@@ -42,12 +45,12 @@ def add_task(conn: sqlite3.Connection, task: Task) -> int | None:
     :param task: Task object
     :return: task id
     """
-    sql = '''INSERT INTO Tasks(title, description, duration, creation_date, repetition, priority, category)
-             VALUES(?,?,?,?,?,?,?)'''
+    sql = '''INSERT INTO Tasks(title, description, duration, creation_date, repetition, priority, category, due_date, reminder_set, status)
+             VALUES(?,?,?,?,?,?,?,?,?,?)'''
     try:
         cursor = conn.cursor()
         cursor.execute(sql, (task.title, task.description, task.duration, task.creation_date,
-                           task.repetition, task.priority, task.category))
+                           task.repetition, task.priority, task.category, task.due_date, task.reminder_set, task.status))
         conn.commit()
         return cursor.lastrowid
     except Error as e:
@@ -67,7 +70,8 @@ def get_task(conn: sqlite3.Connection, task_id: int) -> Task | None:
         row = cursor.fetchone()
         if row:
             return Task(id=row[0], title=row[1], description=row[2], duration=row[3],
-                        creation_date=row[4], repetition=row[5], priority=row[6], category=row[7])
+                        creation_date=row[4], repetition=row[5], priority=row[6], category=row[7],
+                        due_date=row[8], reminder_set=bool(row[9]), status=row[10])
         else:
             return None
     except Error as e:
@@ -87,7 +91,8 @@ def get_all_tasks(conn: sqlite3.Connection) -> list[Task]:
         rows = cursor.fetchall()
         for row in rows:
             tasks_list.append(Task(id=row[0], title=row[1], description=row[2], duration=row[3],
-                                   creation_date=row[4], repetition=row[5], priority=row[6], category=row[7]))
+                                   creation_date=row[4], repetition=row[5], priority=row[6], category=row[7],
+                                   due_date=row[8], reminder_set=bool(row[9]), status=row[10]))
         return tasks_list
     except Error as e:
         print(f"Error getting all tasks: {e}")
@@ -107,12 +112,15 @@ def update_task(conn: sqlite3.Connection, task: Task) -> bool:
                  creation_date = ?,
                  repetition = ?,
                  priority = ?,
-                 category = ?
+                 category = ?,
+                 due_date = ?,
+                 reminder_set = ?,
+                 status = ?
              WHERE id = ?'''
     try:
         cursor = conn.cursor()
         cursor.execute(sql, (task.title, task.description, task.duration, task.creation_date,
-                           task.repetition, task.priority, task.category, task.id))
+                           task.repetition, task.priority, task.category, task.due_date, task.reminder_set, task.status, task.id))
         conn.commit()
         return cursor.rowcount > 0
     except Error as e:
