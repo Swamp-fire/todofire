@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 import ttkbootstrap as bs
-from ttkbootstrap.tooltip import ToolTip # Added
+from ttkbootstrap.tooltip import ToolTip
 from tts_manager import tts_manager
 import logging
 
@@ -10,40 +10,39 @@ logger = logging.getLogger(__name__)
 class ReminderPopupUI(bs.Toplevel):
     def __init__(self, parent, task, app_callbacks):
         super().__init__(parent)
-        self.overrideredirect(True) # Add this line for frameless window
+        self.overrideredirect(True)
         self.task = task
         self.app_callbacks = app_callbacks
         self.after_id = None
-        self.is_expanded = False # For description toggle
-        self._drag_offset_x = 0 # For dragging
-        self._drag_offset_y = 0 # For dragging
+        self.is_expanded = False
+        self._drag_offset_x = 0
+        self._drag_offset_y = 0
 
         self.width = 380
-        self.initial_height = 90  # Further Adjusted
-        self.expanded_height = 215 # Further Adjusted
+        self.initial_height = 90  # Restored thinner value
+        self.expanded_height = 215 # Restored thinner value
 
         self.remaining_work_seconds = 0
         if self.task and self.task.duration and self.task.duration > 0:
             self.remaining_work_seconds = self.task.duration * 60
 
-        self.title("Reminder!")
-        self.geometry(f"{self.width}x{self.initial_height}")
+        self.geometry(f"{self.width}x{self.initial_height}") # Use initial height
+
         self.wm_attributes("-topmost", 1)
         self.resizable(False, False)
-        self.protocol("WM_DELETE_WINDOW", self.skip_reminder)
+        # self.protocol("WM_DELETE_WINDOW", self.skip_reminder) # Ineffective due to overrideredirect
 
-        # Bindings for dragging the frameless window
         self.bind("<ButtonPress-1>", self._on_mouse_press)
         self.bind("<ButtonRelease-1>", self._on_mouse_release)
         self.bind("<B1-Motion>", self._on_mouse_drag)
 
         self._setup_ui()
 
-        if self.remaining_work_seconds > 0:
+        if self.remaining_work_seconds > 0: # Call restored
             self._update_countdown()
 
         logger.info(f"ReminderPopupUI created for task ID: {self.task.id if self.task else 'N/A'}, Title: {self.task.title if self.task else 'N/A'}")
-        try:
+        try: # TTS calls restored
             if self.task and self.task.title:
                 speech_text = f"Reminder for task: {self.task.title}"
                 logger.info(f"Popup: Requesting TTS for: '{speech_text}'")
@@ -58,26 +57,24 @@ class ReminderPopupUI(bs.Toplevel):
             logger.error(f"CRITICAL: Unexpected error initiating TTS from ReminderPopupUI: {e}", exc_info=True)
 
     def _setup_ui(self):
-        main_frame = bs.Frame(self, padding=(10,3,10,3)) # Adjusted padding
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        self.main_frame = bs.Frame(self) # Removed debug bootstyle="info"
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
-        # Top content frame for title and duration/countdown
-        top_content_frame = bs.Frame(main_frame)
-        top_content_frame.pack(fill=tk.X, pady=(0, 2)) # Adjusted pady
+        # Top content frame for title and duration/countdown - Restored
+        top_content_frame = bs.Frame(self.main_frame)
+        top_content_frame.pack(fill=tk.X, pady=(0, 2))
 
-        # Task Title Label (in top_content_frame, packed left)
+        # Task Title Label (in top_content_frame, packed left) - Restored
         title_label = bs.Label(top_content_frame, text=self.task.title if self.task else "No Title",
                                font=("Helvetica", 14, "bold"), anchor="w",
-                               wraplength=self.width - 80, justify=tk.LEFT, padding=(0,0,0,2)) # Adjusted padding
+                               wraplength=self.width - 80, justify=tk.LEFT, padding=(0,0,0,2))
         title_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
 
-        # Duration/Countdown Frame (in top_content_frame, packed right)
+        # Duration/Countdown Frame (in top_content_frame, packed right) - Restored
         duration_display_frame = bs.Frame(top_content_frame)
-        # Removed static_duration_text_label
-        duration_display_frame.pack(side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0)) # No change to its internal padding needed here
+        duration_display_frame.pack(side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0))
 
         if self.task and self.task.duration and self.task.duration > 0:
-            # static_duration_text_label removed
             hours = self.remaining_work_seconds // 3600
             minutes = (self.remaining_work_seconds % 3600) // 60
             seconds = self.remaining_work_seconds % 60
@@ -94,9 +91,8 @@ class ReminderPopupUI(bs.Toplevel):
             no_duration_label = bs.Label(duration_display_frame, text="No specific work duration.", style="secondary.TLabel")
             no_duration_label.pack(side=tk.LEFT)
 
-        # Description Frame (Initially not packed, packed by toggle_expand_popup)
-        self.desc_frame = bs.Frame(main_frame)
-        # self.desc_frame will be packed by toggle_expand_popup if needed.
+        # Description Frame (Initially not packed, packed by toggle_expand_popup) - Restored
+        self.desc_frame = bs.Frame(self.main_frame)
 
         self.description_text_widget = tk.Text(self.desc_frame, wrap=tk.WORD, height=5, relief=tk.FLAT,
                                                 borderwidth=0, highlightthickness=0, font=("Helvetica", 10))
@@ -104,33 +100,45 @@ class ReminderPopupUI(bs.Toplevel):
         self.description_text_widget.insert(tk.END, desc_text_content)
 
         try:
-            bg_color = self.cget('background') # Get parent Toplevel background
+            bg_color = self.cget('background')
             self.description_text_widget.config(state=tk.DISABLED, bg=bg_color)
-        except tk.TclError: # Fallback for environments where cget might fail for Toplevel bg
+        except tk.TclError:
             self.description_text_widget.config(state=tk.DISABLED, bg="SystemButtonFace")
         self.description_text_widget.pack(fill=tk.BOTH, expand=True)
 
 
-        # Button Frame (Store as self.button_frame_ref for toggle_expand_popup)
-        self.button_frame_ref = bs.Frame(main_frame)
-        self.button_frame_ref.pack(fill=tk.X, side=tk.BOTTOM, pady=(3,2))
-        # self.button_frame_ref.configure(bootstyle="danger") # Reverted debugging style
+        # Button Frame Setup (Focus Element)
+        self.button_frame_ref = bs.Frame(self.main_frame) # Removed bootstyle="danger"
+        self.button_frame_ref.pack_propagate(False) # Keep this if size issues were there
+        self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2)) # Ensure it's at bottom, adjust padding
 
-        self.expand_button = bs.Button(self.button_frame_ref, text="▼", command=self.toggle_expand_popup, style="info.Round.TButton") # Removed width
-        self.expand_button.pack(side=tk.LEFT, padx=2) # Adjusted padx
+        # Restore ALL Original Buttons with their "round" bootstyles
+        self.expand_button = bs.Button(self.button_frame_ref,
+                                   text="▼",
+                                   command=self.toggle_expand_popup,
+                                   bootstyle="info-outline-round")
+        self.expand_button.pack(side=tk.LEFT, padx=2)
         ToolTip(self.expand_button, text="More Info")
 
-        # Action buttons packed to the right (so add them in reverse visual order)
-        self.skip_button = bs.Button(self.button_frame_ref, text="⏩", command=self.skip_reminder, style="secondary.Round.TButton") # Restored text and style, removed width
-        self.skip_button.pack(side=tk.RIGHT, padx=(2,0)) # Adjusted padx (0 for the very right edge)
+        self.skip_button = bs.Button(self.button_frame_ref,
+                                   text="⏩",
+                                   command=self.skip_reminder,
+                                   bootstyle="secondary-round")
+        self.skip_button.pack(side=tk.RIGHT, padx=(2,0))
         ToolTip(self.skip_button, text="Skip Reminder")
 
-        self.complete_button = bs.Button(self.button_frame_ref, text="✔️", command=self.complete_task, style="secondary.Round.TButton") # Removed width
-        self.complete_button.pack(side=tk.RIGHT, padx=2) # Adjusted padx
+        self.complete_button = bs.Button(self.button_frame_ref,
+                                     text="✔️",
+                                     command=self.complete_task,
+                                     bootstyle="success-round")
+        self.complete_button.pack(side=tk.RIGHT, padx=2)
         ToolTip(self.complete_button, text="Mark as Complete")
 
-        self.reschedule_button = bs.Button(self.button_frame_ref, text="🔄", command=self.reschedule_task, style="secondary.Round.TButton") # Removed width
-        self.reschedule_button.pack(side=tk.RIGHT, padx=2) # Adjusted padx
+        self.reschedule_button = bs.Button(self.button_frame_ref,
+                                       text="🔄",
+                                       command=self.reschedule_task,
+                                       bootstyle="warning-round")
+        self.reschedule_button.pack(side=tk.RIGHT, padx=2)
         ToolTip(self.reschedule_button, text="Reschedule (+15m)")
 
     def _update_countdown(self):
@@ -144,17 +152,17 @@ class ReminderPopupUI(bs.Toplevel):
             else:
                 time_str = f"{minutes:02d}:{seconds:02d}"
 
-            if hasattr(self, 'countdown_label') and self.countdown_label.winfo_exists():
-                self.countdown_label.config(text=time_str)
+            if hasattr(self, 'countdown_label') and self.countdown_label.winfo_exists(): # Restored
+                self.countdown_label.config(text=time_str) # Restored
 
             self.remaining_work_seconds -= 1
             self.after_id = self.after(1000, self._update_countdown)
         elif hasattr(self, 'countdown_label') and self.countdown_label.winfo_exists():
-            self.countdown_label.config(text="Time's up!")
+            self.countdown_label.config(text="Time's up!") # Restored
             logger.info(f"Work duration timer for task ID: {self.task.id if self.task else 'N/A'} has finished. Auto-triggering completion.")
             self.complete_task()
 
-    def reschedule_task(self):
+    def reschedule_task(self): # Restored body
         if self.after_id:
             self.after_cancel(self.after_id)
             self.after_id = None
@@ -172,7 +180,7 @@ class ReminderPopupUI(bs.Toplevel):
 
         self._cleanup_and_destroy()
 
-    def complete_task(self):
+    def complete_task(self): # Restored body
         if self.after_id:
             self.after_cancel(self.after_id)
             self.after_id = None
@@ -190,7 +198,7 @@ class ReminderPopupUI(bs.Toplevel):
 
         self._cleanup_and_destroy()
 
-    def skip_reminder(self):
+    def skip_reminder(self): # Restored body
         if self.after_id:
             self.after_cancel(self.after_id)
             self.after_id = None
@@ -198,7 +206,7 @@ class ReminderPopupUI(bs.Toplevel):
         logger.info(f"Popup: Skip requested for task ID: {task_id_info}")
         self._cleanup_and_destroy()
 
-    def _cleanup_and_destroy(self):
+    def _cleanup_and_destroy(self): # Restored body
         logger.debug(f"Popup: Cleaning up for task ID {self.task.id if self.task else 'N/A'}")
         if self.after_id:
             self.after_cancel(self.after_id)
@@ -212,48 +220,39 @@ class ReminderPopupUI(bs.Toplevel):
                 logger.error(f"Popup: Error calling remove_from_active callback: {e}", exc_info=True)
         self.destroy()
 
-    def toggle_expand_popup(self):
+    def toggle_expand_popup(self): # Restored body
         self.is_expanded = not self.is_expanded
         if self.is_expanded:
-            # Ensure desc_frame is packed before button_frame_ref
-            # button_frame_ref must be stored in _setup_ui
             if hasattr(self, 'desc_frame') and hasattr(self, 'button_frame_ref'):
-                 self.desc_frame.pack(fill=tk.BOTH, expand=True, pady=(3,3), before=self.button_frame_ref) # pady already minimal
+                 self.desc_frame.pack(fill=tk.BOTH, expand=True, pady=(3,3), before=self.button_frame_ref)
             self.geometry(f"{self.width}x{self.expanded_height}")
             if hasattr(self, 'expand_button'):
-                self.expand_button.config(text="▲") # Changed
+                self.expand_button.config(text="▲")
                 ToolTip(self.expand_button, text="Less Info")
-        else: # Collapsing
+        else:
             if hasattr(self, 'desc_frame'): self.desc_frame.pack_forget()
             self.geometry(f"{self.width}x{self.initial_height}")
             if hasattr(self, 'expand_button'):
-                self.expand_button.config(text="▼") # Changed
+                self.expand_button.config(text="▼")
                 ToolTip(self.expand_button, text="More Info")
 
     def _on_mouse_press(self, event):
-        # Record the initial mouse click position relative to the window's corner
         self._drag_offset_x = event.x
         self._drag_offset_y = event.y
         # logger.debug(f"Mouse press: x={event.x}, y={event.y}")
 
     def _on_mouse_release(self, event):
-        # Can be used to reset any dragging state if needed, or log drag end.
         # logger.debug(f"Mouse release: x={event.x}, y={event.y}")
         pass
 
     def _on_mouse_drag(self, event):
-        # The new window top-left (self.winfo_x(), self.winfo_y())
-        # should be where the mouse currently is on screen (event.x_root, event.y_root)
-        # minus the offset from the window's top-left corner to where the mouse was initially pressed (self._drag_offset_x, self._drag_offset_y)
         new_x = event.x_root - self._drag_offset_x
         new_y = event.y_root - self._drag_offset_y
-
         self.geometry(f"+{new_x}+{new_y}")
         # logger.debug(f"Dragging to: +{new_x}+{new_y}")
 
-# Example usage
+# Example usage (remains for standalone testing if needed)
 if __name__ == '__main__':
-    # ... (main test block remains the same)
     class DummyTask:
         def __init__(self, id, title, description, duration):
             self.id = id
@@ -263,14 +262,13 @@ if __name__ == '__main__':
 
     class DummyApp:
         def __init__(self):
-            # If running this file directly, ensure basicConfig is called for logger to output
             if not logging.getLogger().hasHandlers():
-                 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
+                 logging.basicConfig(level=logging.DEBUG)
 
-            self.root = bs.Window(themename="litera")
-            self.root.title("Main App Window")
+            self.root = bs.Window(themename="solar")
+            self.root.title("Main Test Window (for Popup)")
 
-            self.sample_task = DummyTask(1, "Test Task Popup", "This is a description for the test task.", 0) # Duration 0 for no countdown
+            self.sample_task = DummyTask(1, "Test Full UI Popup", "This is a description for the full UI test popup.", 30) # 30s duration for test
 
             self.callbacks = {
                 'reschedule': lambda task_id, mins: logger.info(f"MAIN APP: Reschedule task {task_id} by {mins} mins."),
@@ -278,19 +276,13 @@ if __name__ == '__main__':
                 'remove_from_active': lambda task_id: logger.info(f"MAIN APP: Popup for task {task_id} closed.")
             }
 
-            show_button = bs.Button(self.root, text="Show Reminder Popup (No Countdown)", command=self.show_dummy_popup)
+            show_button = bs.Button(self.root, text="Show Full UI Popup", command=self.show_dummy_popup)
             show_button.pack(pady=10)
 
-            self.sample_task_with_countdown = DummyTask(2, "Test Countdown Popup", "Description for countdown.", 1) # 1 min duration
-            show_button_countdown = bs.Button(self.root, text="Show Reminder Popup (1 Min Countdown)", command=self.show_dummy_popup_countdown)
-            show_button_countdown.pack(pady=10)
-
+            self.root.geometry("300x200")
             self.root.mainloop()
 
         def show_dummy_popup(self):
             popup = ReminderPopupUI(self.root, self.sample_task, self.callbacks)
 
-        def show_dummy_popup_countdown(self):
-            popup = ReminderPopupUI(self.root, self.sample_task_with_countdown, self.callbacks)
-
-    # DummyApp()
+    DummyApp()

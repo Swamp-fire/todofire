@@ -1,0 +1,47 @@
+Could not retrieve detailed voice properties: 'NoneType' object has no attribute 'decode'
+Traceback (most recent call last):
+  File "/app/tts_manager.py", line 35, in _initialize_engine
+    current_voice_id = self.engine.getProperty('voice')
+  File "/home/swebot/.local/lib/python3.10/site-packages/pyttsx3/engine.py", line 149, in getProperty
+    return self.proxy.getProperty(name)
+  File "/home/swebot/.local/lib/python3.10/site-packages/pyttsx3/driver.py", line 176, in getProperty
+    return self._driver.getProperty(name)
+  File "/home/swebot/.local/lib/python3.10/site-packages/pyttsx3/drivers/espeak.py", line 84, in getProperty
+    return fromUtf8(voice.contents.name)
+  File "/home/swebot/.local/lib/python3.10/site-packages/pyttsx3/drivers/__init__.py", line 23, in fromUtf8
+    return value.decode('utf-8')
+AttributeError: 'NoneType' object has no attribute 'decode'
+2025-06-08 18:00:32,907 - INFO     - __main__                  - Application starting...
+2025-06-08 18:00:32,922 - ERROR    - __main__                  - Tkinter TclError occurred: no display name and no $DISPLAY environment variable
+Traceback (most recent call last):
+  File "/app/main_app.py", line 955, in <module>
+    root = bs.Window(themename="solar")
+  File "/home/swebot/.local/lib/python3.10/site-packages/ttkbootstrap/window.py", line 235, in __init__
+    super().__init__(**kwargs)
+  File "/home/swebot/.local/lib/python3.10/site-packages/ttkbootstrap/style.py", line 5318, in __init__wrapper
+    func(self, *args, **kwargs)
+  File "/usr/lib/python3.10/tkinter/__init__.py", line 2302, in __init__
+    self.tk = _tkinter.create(screenName, baseName, className, interactive, wantobjects, useTk, sync, use)
+_tkinter.TclError: no display name and no $DISPLAY environment variable
+2025-06-08 18:00:32,941 - INFO     - __main__                  - No display found, attempting to run in HEADLESS test mode.
+2025-06-08 18:00:32,941 - INFO     - __main__                  - Initializing TaskManagerApp in HEADLESS mode.
+2025-06-08 18:00:32,941 - INFO     - __main__                  - UI setup and UI-based queue polling skipped in HEADLESS mode.
+2025-06-08 18:00:32,941 - INFO     - __main__                  - Initializing scheduler...
+2025-06-08 18:00:32,949 - INFO     - apscheduler.scheduler     - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-06-08 18:00:32,949 - INFO     - scheduler_manager         - Job 'job_check_repetition' (target: check_repeating_tasks) configured with interval: 1 hour.
+2025-06-08 18:00:32,949 - INFO     - apscheduler.scheduler     - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-06-08 18:00:32,949 - INFO     - scheduler_manager         - Job 'job_rescheduler_reminders' (target: schedule_task_reminders) configured with interval: 5 minutes.
+2025-06-08 18:00:32,952 - INFO     - apscheduler.scheduler     - Added job "check_repeating_tasks" to job store "default"
+2025-06-08 18:00:32,952 - INFO     - apscheduler.scheduler     - Added job "schedule_task_reminders" to job store "default"
+2025-06-08 18:00:32,952 - INFO     - apscheduler.scheduler     - Scheduler started
+2025-06-08 18:00:32,953 - INFO     - scheduler_manager         - BackgroundScheduler initialized and started.
+2025-06-08 18:00:32,953 - INFO     - scheduler_manager         - Performing initial scan and scheduling of reminders...
+2025-06-08 18:00:32,954 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' started.
+2025-06-08 18:00:32,960 - INFO     - scheduler_manager         - Fetched 1 tasks from DB for reminder scheduling.
+2025-06-08 18:00:32,969 - INFO     - apscheduler.scheduler     - Added job "trigger_reminder_action" to job store "default"
+2025-06-08 18:00:32,969 - INFO     - scheduler_manager         - Scheduled reminder for Task 'Daily Task A 1AM' (ID: 1). Trigger: {'trigger': 'cron', 'start_date': datetime.datetime(2025, 6, 9, 1, 0), 'hour': 1, 'minute': 0}
+2025-06-08 18:00:32,969 - INFO     - scheduler_manager         - Scheduler job 'schedule_task_reminders' completed. Tasks processed: 1. New reminders: 1, Updated: 0, Skipped (past one-time): 0, Skipped (no trigger): 0, Removed stale: 0.
+2025-06-08 18:00:32,970 - INFO     - __main__                  - Scheduler initialized successfully.
+2025-06-08 18:00:32,970 - INFO     - __main__                  - TaskManagerApp initialization complete.
+2025-06-08 18:00:32,970 - INFO     - __main__                  - Running in HEADLESS test mode. Scheduler and queue processing active.
+2025-06-08 18:00:32,970 - INFO     - __main__                  - Application will simulate running for up to 5 minutes. Press Ctrl+C to interrupt.
