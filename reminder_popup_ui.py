@@ -14,17 +14,18 @@ class ReminderPopupUI(bs.Toplevel):
         self.task = task
         self.app_callbacks = app_callbacks
         self.after_id = None
-        self.is_expanded = False # For toggle_expand_popup text logic
+        self.is_expanded = False # Initialized
         self._drag_offset_x = 0
         self._drag_offset_y = 0
 
-        # self.width = 380 # Not used for this fixed geometry
+        self.width = 380 # Kept for reference, not used by current fixed geometry
+
         self.remaining_work_seconds = 0
         if self.task and self.task.duration and self.task.duration > 0:
             self.remaining_work_seconds = self.task.duration * 60
 
         # Set fixed large geometry for this debug step
-        self.geometry("500x500+100+100")
+        self.geometry("500x150+100+100")
 
         self.wm_attributes("-topmost", 1)
         self.resizable(False, False)
@@ -39,7 +40,7 @@ class ReminderPopupUI(bs.Toplevel):
         # if self.remaining_work_seconds > 0:
         #     self._update_countdown()
 
-        logger.info(f"ReminderPopupUI (Debug Step: Large Popup, Default bs.Button) created for task ID: {self.task.id if self.task else 'N/A'}")
+        logger.info(f"ReminderPopupUI (Debug Step: Large Popup, Default bs.Buttons) created for task ID: {self.task.id if self.task else 'N/A'}")
         # CRITICAL: TTS calls in __init__ REMAINS COMMENTED OUT
         # try:
         #     # ... TTS logic ...
@@ -47,7 +48,8 @@ class ReminderPopupUI(bs.Toplevel):
         #     logger.error(f"CRITICAL: Unexpected error initiating TTS from ReminderPopupUI: {e}", exc_info=True)
 
     def _setup_ui(self):
-        self.main_frame = bs.Frame(self, bootstyle="light")
+        # self.main_frame uses default theme styling
+        self.main_frame = bs.Frame(self) # NO bootstyle/bg specified
         self.main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         # --- top_content_frame and desc_frame remain COMMENTED OUT ---
@@ -57,10 +59,11 @@ class ReminderPopupUI(bs.Toplevel):
         # # ...
 
         # Button Frame Setup
-        self.button_frame_ref = bs.Frame(self.main_frame, bootstyle="secondary") # Debug style
+        self.button_frame_ref = bs.Frame(self.main_frame) # NO bootstyle/bg specified
+        # Removed fixed width/height and pack_propagate(False) to let it size by children
         self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=5, ipady=5)
 
-        # Add ALL FOUR bs.Button instances with NO bootstyle/style (absolute default)
+        # Add ALL FOUR bs.Button instances with NO explicit style or bootstyle
         # NO fixed width. All packed side=tk.LEFT for this test.
 
         self.expand_button = bs.Button(self.button_frame_ref,
@@ -88,7 +91,8 @@ class ReminderPopupUI(bs.Toplevel):
         ToolTip(self.skip_button, text="Skip Reminder")
 
     def _update_countdown(self):
-        pass # Keep disabled
+        # Body remains pass or with UI updates commented out
+        pass
 
     def reschedule_task(self):
         logger.info("DEBUG: Reschedule button clicked")
@@ -104,29 +108,32 @@ class ReminderPopupUI(bs.Toplevel):
 
     def _cleanup_and_destroy(self):
         logger.debug(f"Popup: Cleaning up for task ID {self.task.id if self.task else 'N/A'}")
-        if hasattr(self, 'after_id') and self.after_id: # Check if after_id exists
+        if hasattr(self, 'after_id') and self.after_id:
             self.after_cancel(self.after_id)
             self.after_id = None
 
-        # Callbacks might not exist if app_callbacks was None
         if hasattr(self, 'app_callbacks') and self.app_callbacks and 'remove_from_active' in self.app_callbacks:
             try:
                 self.app_callbacks['remove_from_active'](self.task.id if self.task else None)
             except Exception as e:
                 logger.error(f"Popup: Error calling remove_from_active callback: {e}", exc_info=True)
-        self.destroy()
+        if hasattr(self, 'destroy'):
+             self.destroy()
 
     def toggle_expand_popup(self):
         self.is_expanded = not self.is_expanded
-        # self.desc_frame.pack(...) # Commented out
-        # self.geometry(...) # Commented out
-        if hasattr(self, 'expand_button'): # Check if button exists
+        # # self.desc_frame.pack(...) # Commented out
+        # # self.geometry(...) # Commented out - geometry fixed for this test
+        if hasattr(self, 'expand_button'):
             if self.is_expanded:
                 self.expand_button.config(text="▲")
                 ToolTip(self.expand_button, text="Less Info")
             else:
                 self.expand_button.config(text="▼")
                 ToolTip(self.expand_button, text="More Info")
+        else:
+            logger.warning("toggle_expand_popup: expand_button not found")
+
 
     def _on_mouse_press(self, event):
         self._drag_offset_x = event.x
