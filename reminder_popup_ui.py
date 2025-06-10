@@ -149,28 +149,51 @@ class ReminderPopupUI(bs.Toplevel):
         # pass
 
     def reschedule_task(self):
-        logger.info("DEBUG: Reschedule button clicked")
+        task_id_info = self.task.id if self.task else "N/A"
+        logger.debug(f"POPUP_ACTION: Attempting 'reschedule' callback for task ID: {task_id_info}.")
+        if self.app_callbacks and 'reschedule' in self.app_callbacks:
+            try:
+                self.app_callbacks['reschedule'](self.task.id if self.task else None, 15)
+                logger.debug(f"POPUP_ACTION: 'reschedule' callback attempted for task ID: {task_id_info}.")
+            except Exception as e:
+                logger.error(f"Popup: Error calling reschedule callback for task ID {task_id_info}: {e}", exc_info=True)
+        else:
+            logger.warning(f"Popup: 'reschedule' callback not found or app_callbacks not set for task ID: {task_id_info}")
         self._cleanup_and_destroy()
 
     def complete_task(self):
-        logger.info("DEBUG: Complete button clicked")
+        task_id_info = self.task.id if self.task else "N/A"
+        logger.debug(f"POPUP_ACTION: Attempting 'complete' callback for task ID: {task_id_info}.")
+        if self.app_callbacks and 'complete' in self.app_callbacks:
+            try:
+                self.app_callbacks['complete'](self.task.id if self.task else None)
+                logger.debug(f"POPUP_ACTION: 'complete' callback attempted for task ID: {task_id_info}.")
+            except Exception as e:
+                logger.error(f"Popup: Error calling complete callback for task ID {task_id_info}: {e}", exc_info=True)
+        else:
+            logger.warning(f"Popup: 'complete' callback not found or app_callbacks not set for task ID: {task_id_info}")
         self._cleanup_and_destroy()
 
     def skip_reminder(self):
-        logger.info("DEBUG: Skip button clicked")
+        logger.debug(f"POPUP_ACTION: 'skip_reminder' called for task ID: {self.task.id if self.task else 'N/A'}. Closing popup.")
         self._cleanup_and_destroy()
 
     def _cleanup_and_destroy(self):
-        logger.debug(f"Popup: Cleaning up for task ID {self.task.id if self.task else 'N/A'}")
+        task_id_info = self.task.id if self.task else "N/A" # For logging before task might be None
+        logger.debug(f"POPUP_CLEANUP: Cleaning up for task ID {task_id_info}")
         if hasattr(self, 'after_id') and self.after_id:
             self.after_cancel(self.after_id)
             self.after_id = None
 
         if hasattr(self, 'app_callbacks') and self.app_callbacks and 'remove_from_active' in self.app_callbacks:
             try:
+                logger.debug(f"POPUP_CLEANUP: Attempting 'remove_from_active' callback for task ID: {task_id_info}.")
                 self.app_callbacks['remove_from_active'](self.task.id if self.task else None)
+                logger.debug(f"POPUP_CLEANUP: 'remove_from_active' callback attempted for task ID: {task_id_info}.")
             except Exception as e:
                 logger.error(f"Popup: Error calling remove_from_active callback: {e}", exc_info=True)
+
+        logger.debug(f"POPUP_CLEANUP: Destroying window for task ID: {task_id_info}.")
         if hasattr(self, 'destroy'):
              self.destroy()
 

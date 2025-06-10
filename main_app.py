@@ -14,7 +14,7 @@ from tts_manager import tts_manager
 import time
 import sys
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)-8s - %(name)-25s - %(message)s')
+# Logging level will be set in if __name__ == '__main__'
 logger = logging.getLogger(__name__)
 
 class TaskManagerApp:
@@ -951,6 +951,8 @@ if __name__ == '__main__':
     root = None
     app = None
     try:
+        # Set logging level to DEBUG for this test phase
+        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)-8s - %(name)-25s - %(message)s')
         logger.info("Application starting...")
         root = bs.Window(themename="solar")
         logger.info("GUI mode detected. Initializing TaskManagerApp for GUI.")
