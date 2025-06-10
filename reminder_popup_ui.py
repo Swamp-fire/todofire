@@ -14,18 +14,19 @@ class ReminderPopupUI(bs.Toplevel):
         self.task = task
         self.app_callbacks = app_callbacks
         self.after_id = None
-        self.is_expanded = False # Initialized
+        self.is_expanded = False # Kept for toggle_expand_popup text change
         self._drag_offset_x = 0
         self._drag_offset_y = 0
 
-        self.width = 380 # Kept for reference, not used by current fixed geometry
+        self.width = 400 # Adjusted width
+        self.initial_height = 120 # Adjusted initial height for this step
+        self.expanded_height = 215 # (Not used in this step as desc_frame is out)
 
         self.remaining_work_seconds = 0
         if self.task and self.task.duration and self.task.duration > 0:
             self.remaining_work_seconds = self.task.duration * 60
 
-        # Set fixed large geometry for this debug step
-        self.geometry("500x150+100+100")
+        self.geometry(f"{self.width}x{self.initial_height}+100+100")
 
         self.wm_attributes("-topmost", 1)
         self.resizable(False, False)
@@ -36,36 +37,71 @@ class ReminderPopupUI(bs.Toplevel):
 
         self._setup_ui()
 
-        # CRITICAL: Call to _update_countdown() REMAINS COMMENTED OUT
-        # if self.remaining_work_seconds > 0:
-        #     self._update_countdown()
+        # Restore _update_countdown call
+        if self.remaining_work_seconds > 0:
+            self._update_countdown()
 
-        logger.info(f"ReminderPopupUI (Debug Step: Large Popup, Default bs.Buttons) created for task ID: {self.task.id if self.task else 'N/A'}")
-        # CRITICAL: TTS calls in __init__ REMAINS COMMENTED OUT
-        # try:
-        #     # ... TTS logic ...
-        # except Exception as e:
-        #     logger.error(f"CRITICAL: Unexpected error initiating TTS from ReminderPopupUI: {e}", exc_info=True)
+        logger.info(f"ReminderPopupUI (Restored Title/Timer) created for task ID: {self.task.id if self.task else 'N/A'}")
+        # Restore TTS calls
+        try:
+            if self.task and self.task.title:
+                speech_text = f"Reminder for task: {self.task.title}"
+                logger.info(f"Popup: Requesting TTS for: '{speech_text}'")
+                tts_manager.speak(speech_text)
+            elif self.task:
+                logger.warning(f"Popup: Task ID {self.task.id if self.task else 'N/A'} has no title. Speaking generic reminder.")
+                tts_manager.speak("Reminder for task with no title.")
+            else:
+                logger.error("Popup: Task details are unavailable for TTS. Speaking generic error.")
+                tts_manager.speak("Reminder triggered, but task details are unavailable.", error_context=True)
+        except Exception as e:
+            logger.error(f"CRITICAL: Unexpected error initiating TTS from ReminderPopupUI: {e}", exc_info=True)
 
     def _setup_ui(self):
-        # self.main_frame uses default theme styling
-        self.main_frame = bs.Frame(self) # NO bootstyle/bg specified
+        self.main_frame = bs.Frame(self)
         self.main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # --- top_content_frame and desc_frame remain COMMENTED OUT ---
-        # # Top content frame (title/timer)
-        # # ...
-        # # Description Frame
-        # # ...
+        # Restore top_content_frame
+        self.top_content_frame = bs.Frame(self.main_frame)
+        self.top_content_frame.pack(side=tk.TOP, fill=tk.X, pady=(0,5), anchor='n') # pady was (0,2)
+
+        # Restore title_label
+        self.title_label = bs.Label(self.top_content_frame, text=(self.task.title if self.task and self.task.title else "No Title"),
+                               font=("Helvetica", 14, "bold"),
+                               wraplength=(self.width - 100), # Adjusted wraplength
+                               anchor="w", justify=tk.LEFT)
+        self.title_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
+
+        # Restore duration_display_frame (contains countdown or no_duration message)
+        self.duration_display_frame = bs.Frame(self.top_content_frame)
+        self.duration_display_frame.pack(side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0))
+
+        if self.task and self.task.duration and self.task.duration > 0:
+            hours = self.remaining_work_seconds // 3600
+            minutes = (self.remaining_work_seconds % 3600) // 60
+            seconds = self.remaining_work_seconds % 60
+
+            if hours > 0:
+                initial_duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+            else:
+                initial_duration_str = f"{minutes:02d}:{seconds:02d}"
+
+            self.countdown_label = bs.Label(self.duration_display_frame, text=initial_duration_str,
+                                            font=("Helvetica", 12, "bold"), style="info.TLabel")
+            self.countdown_label.pack(side=tk.LEFT)
+        else:
+            no_duration_label = bs.Label(self.duration_display_frame, text="No specific work duration.", style="secondary.TLabel")
+            no_duration_label.pack(side=tk.LEFT)
+
+        # desc_frame remains commented out for this step
+        # # self.desc_frame = bs.Frame(self.main_frame)
+        # # ... (desc_frame content) ...
 
         # Button Frame Setup
-        self.button_frame_ref = bs.Frame(self.main_frame) # NO bootstyle/bg specified
-        # Removed fixed width/height and pack_propagate(False) to let it size by children
-        self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=5, ipady=5)
+        self.button_frame_ref = bs.Frame(self.main_frame)
+        self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(5,0), ipady=5) # pady changed from (5,5)
 
-        # Add ALL FOUR bs.Button instances with NO explicit style or bootstyle
-        # NO fixed width. All packed side=tk.LEFT for this test.
-
+        # Buttons use default styles (no explicit bootstyle or style)
         self.expand_button = bs.Button(self.button_frame_ref,
                                    text="▼",
                                    command=self.toggle_expand_popup)
@@ -90,9 +126,27 @@ class ReminderPopupUI(bs.Toplevel):
         self.skip_button.pack(side=tk.LEFT, padx=5, pady=5)
         ToolTip(self.skip_button, text="Skip Reminder")
 
-    def _update_countdown(self):
-        # Body remains pass or with UI updates commented out
-        pass
+    def _update_countdown(self): # Restored
+        if self.remaining_work_seconds > 0:
+            hours = self.remaining_work_seconds // 3600
+            minutes = (self.remaining_work_seconds % 3600) // 60
+            seconds = self.remaining_work_seconds % 60
+
+            if hours > 0:
+                time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+            else:
+                time_str = f"{minutes:02d}:{seconds:02d}"
+
+            if hasattr(self, 'countdown_label') and self.countdown_label.winfo_exists():
+                self.countdown_label.config(text=time_str)
+
+            self.remaining_work_seconds -= 1
+            self.after_id = self.after(1000, self._update_countdown)
+        elif hasattr(self, 'countdown_label') and self.countdown_label.winfo_exists():
+            self.countdown_label.config(text="Time's up!")
+            logger.info(f"Work duration timer for task ID: {self.task.id if self.task else 'N/A'} has finished. Auto-triggering completion.")
+            # self.complete_task() # Auto-completion might be too aggressive for some users
+        # pass
 
     def reschedule_task(self):
         logger.info("DEBUG: Reschedule button clicked")
@@ -120,19 +174,18 @@ class ReminderPopupUI(bs.Toplevel):
         if hasattr(self, 'destroy'):
              self.destroy()
 
-    def toggle_expand_popup(self):
-        self.is_expanded = not self.is_expanded
+    def toggle_expand_popup(self): # Body remains pass as desc_frame is not used yet
+        # self.is_expanded = not self.is_expanded
         # # self.desc_frame.pack(...) # Commented out
         # # self.geometry(...) # Commented out - geometry fixed for this test
-        if hasattr(self, 'expand_button'):
-            if self.is_expanded:
-                self.expand_button.config(text="▲")
-                ToolTip(self.expand_button, text="Less Info")
-            else:
-                self.expand_button.config(text="▼")
-                ToolTip(self.expand_button, text="More Info")
-        else:
-            logger.warning("toggle_expand_popup: expand_button not found")
+        # if hasattr(self, 'expand_button'):
+        #     if self.is_expanded:
+        #         self.expand_button.config(text="▲")
+        #         ToolTip(self.expand_button, text="Less Info")
+        #     else:
+        #         self.expand_button.config(text="▼")
+        #         ToolTip(self.expand_button, text="More Info")
+        pass
 
 
     def _on_mouse_press(self, event):
@@ -168,7 +221,7 @@ if __name__ == '__main__':
             self.description = description
             self.duration = duration
 
-    sample_task = DummyTask(1, "Default bs.Button Test")
+    sample_task = DummyTask(1, "Test Popup with Title/Timer", "This is a test description that won't be seen.", 65) # 1 min 5 sec duration
 
     def show_popup(task_obj):
         logger.info(f"Attempting to show popup for task: {task_obj.title if task_obj else 'N/A'}")
@@ -182,7 +235,7 @@ if __name__ == '__main__':
         except Exception as e:
             logger.error(f"Error creating ReminderPopupUI in direct test: {e}", exc_info=True)
 
-    tk.Button(root, text="Show Default bs.Button Popup", command=lambda: show_popup(sample_task)).pack(pady=10)
+    tk.Button(root, text="Show Title/Timer Popup", command=lambda: show_popup(sample_task)).pack(pady=10)
 
     root.geometry("300x200")
     root.mainloop()
