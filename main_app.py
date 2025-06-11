@@ -360,27 +360,79 @@ class TaskManagerApp:
             logger.error("Validation Error: Duration TclError (messagebox not available / TclError).")
             return
 
-        due_date_str = self.input_widgets['due_date'].entry.get()
-        due_hour_str = self.input_widgets['due_hour'].get()
-        due_minute_str = self.input_widgets['due_minute'].get()
-        task_due_datetime_iso = None
+        # Due Date Presence Validation (New)
+        due_date_str = ""
+        # Guard UI widget access for headless mode or if input_widgets is not populated
+        if hasattr(self, 'input_widgets') and 'due_date' in self.input_widgets and self.input_widgets['due_date'].entry:
+            due_date_str = self.input_widgets['due_date'].entry.get().strip()
 
-        if due_date_str:
-            if not due_hour_str or not due_minute_str:
-                try:
-                    messagebox.showerror("Missing Time", "If Due Date is set, Due Time (HH:MM) must also be selected.", parent=self.root)
-                except tk.TclError: logger.error("Validation Error: Missing time for due date (messagebox not available).")
-                return
+        # This validation applies only when UI is present and due_date_str is empty
+        if not self.headless_mode and not due_date_str:
+            logger.warning("Save Task Aborted: Due Date is required.")
             try:
-                dt_obj = datetime.datetime.strptime(f"{due_date_str} {due_hour_str}:{due_minute_str}", "%Y-%m-%d %H:%M")
-                task_due_datetime_iso = dt_obj.isoformat()
-            except ValueError:
+                messagebox.showerror("Validation Error",
+                                     "Due Date is required. Please select a due date for the task.",
+                                     parent=self.root)
+            except tk.TclError: # Should not happen if not headless, but good practice
+                logger.error("Validation Error: Due Date is required (messagebox error).")
+            return
+
+        # Due Time Validation (existing, but now only relevant if due_date_str was provided or if headless)
+        task_due_datetime_iso = None
+        due_hour_str = ""
+        due_minute_str = ""
+
+        if hasattr(self, 'input_widgets') and 'due_hour' in self.input_widgets:
+            due_hour_str = self.input_widgets['due_hour'].get()
+        if hasattr(self, 'input_widgets') and 'due_minute' in self.input_widgets:
+            due_minute_str = self.input_widgets['due_minute'].get()
+
+        if due_date_str: # If due_date_str is not empty (it passed the above check or we are headless and it might be something)
+            # In UI mode, if date is set, time must be set
+            if not self.headless_mode and (not due_hour_str or not due_minute_str):
+                logger.warning("Save Task Aborted: Due Time is required when Due Date is set.")
                 try:
-                    messagebox.showerror("Invalid Date/Time", "Due Date or Time is not valid. Please use YYYY-MM-DD format for date and select HH:MM for time.", parent=self.root)
-                except tk.TclError: logger.error("Validation Error: Invalid date/time format (messagebox not available).")
+                    messagebox.showerror("Missing Time",
+                                         "If Due Date is set, Due Time (HH:MM) must also be selected.",
+                                         parent=self.root)
+                except tk.TclError:
+                     logger.error("Validation Error: Missing time for due date (messagebox error).")
                 return
+
+            # If we are here, either headless or (UI mode with date and time parts present)
+            # Attempt to parse if both date and time parts are available (especially for UI path)
+            # Headless path might rely on task_due_datetime_iso being set differently if it's pre-validated
+            if due_hour_str and due_minute_str: # Ensure time parts are available for parsing
+                try:
+                    dt_obj = datetime.datetime.strptime(f"{due_date_str} {due_hour_str}:{due_minute_str}", "%Y-%m-%d %H:%M")
+                    task_due_datetime_iso = dt_obj.isoformat()
+                except ValueError:
+                    logger.warning(f"Save Task Aborted: Invalid date/time format for Due Date '{due_date_str}' and Time '{due_hour_str}:{due_minute_str}'.")
+                    if not self.headless_mode:
+                        try:
+                            messagebox.showerror("Invalid Date/Time",
+                                                 "Due Date or Time is not valid. Please use YYYY-MM-DD format for date and select HH:MM for time.",
+                                                 parent=self.root)
+                        except tk.TclError:
+                            logger.error("Validation Error: Invalid date/time format (messagebox error).")
+                    return
+            elif self.headless_mode and not task_due_datetime_iso:
+                # This case implies headless mode, due_date_str might be present but time parts were not,
+                # and task_due_datetime_iso wasn't pre-set. This might indicate an issue with headless data prep.
+                logger.warning("Headless mode: Due date string present but time parts missing, and task_due_datetime_iso not pre-set.")
 
         # Conflict Check Logic
+        # Ensure task_due_datetime_iso is set if duration > 0 for conflict check
+        if task_duration_total_minutes > 0 and not task_due_datetime_iso:
+            if not self.headless_mode: # In UI mode, this implies due date was set but time was not, which should be caught above.
+                                       # Or, due date was not set, but this new validation makes due_date mandatory.
+                logger.warning("Conflict check skipped: Due date/time not fully specified for a task with duration.")
+                # Given new mandatory due date, this path might change. If due_date is mandatory,
+                # and time is mandatory if date is set, then task_due_datetime_iso should always be set here.
+                # If it's not, it's an error caught by prior validation.
+            else: # Headless mode
+                logger.info("Headless mode: Conflict check skipped as due date/time not provided for task with duration.")
+
         if task_duration_total_minutes > 0 and task_due_datetime_iso:
             perf_start_conflict_check_section = time.perf_counter()
             logger.debug(f"Conflict Check Perf: Entering conflict check section at {perf_start_conflict_check_section:.4f}")

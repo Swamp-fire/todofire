@@ -112,44 +112,43 @@ class ReminderPopupUI(bs.Toplevel):
 
         # Button Frame Setup
         self.button_frame_ref = bs.Frame(self.main_frame)
-        # Apply debug bootstyle as per subtask instruction 2.a
-        self.button_frame_ref.configure(bootstyle="danger")
-        # Confirm packing as per subtask instruction 2.b
+        # Removed: self.button_frame_ref.configure(bootstyle="danger") (Subtask Instruction 2)
+        # Packing remains:
         self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2), ipady=2)
 
-        # Expand Button - Subtask instruction 3
+        # Expand Button - Corrected Instruction 2
         self.expand_button = bs.Button(self.button_frame_ref,
-                                   text="▼",  # Keep icon
-                                   command=self.toggle_expand_popup, # Keep command
-                                   bootstyle="info") # Change bootstyle to "info"
-        self.expand_button.pack(side=tk.LEFT, padx=2) # Verify packing
-        ToolTip(self.expand_button, text="More Info") # Keep ToolTip
+                                   text="▼",
+                                   command=self.toggle_expand_popup,
+                                   bootstyle="info-outline-round") # Attempting round variant
+        self.expand_button.pack(side=tk.LEFT, padx=2)
+        ToolTip(self.expand_button, text="More Info")
 
         # Action buttons packed to the right (visual order from right to left: skip, complete, reschedule)
 
-        # Skip Button - Subtask instruction 6 (order adjusted for right-to-left packing logic)
+        # Skip Button - Corrected Instruction 5
         self.skip_button = bs.Button(self.button_frame_ref,
-                                   text="⏩",  # Keep icon
-                                   command=self.skip_reminder, # Keep command
-                                   bootstyle="secondary") # Change bootstyle to "secondary"
-        self.skip_button.pack(side=tk.RIGHT, padx=(2,0)) # Verify packing
-        ToolTip(self.skip_button, text="Skip Reminder") # Keep ToolTip
+                                   text="⏩",
+                                   command=self.skip_reminder,
+                                   bootstyle="secondary-round") # Attempting round variant
+        self.skip_button.pack(side=tk.RIGHT, padx=(2,0))
+        ToolTip(self.skip_button, text="Skip Reminder")
 
-        # Complete Button - Subtask instruction 5
+        # Complete Button - Corrected Instruction 4
         self.complete_button = bs.Button(self.button_frame_ref,
-                                     text="✔️", # Keep icon
-                                     command=self.complete_task, # Keep command
-                                     bootstyle="success") # Change bootstyle to "success"
-        self.complete_button.pack(side=tk.RIGHT, padx=2) # Verify packing
-        ToolTip(self.complete_button, text="Mark as Complete") # Keep ToolTip
+                                     text="✔️",
+                                     command=self.complete_task,
+                                     bootstyle="secondary-round") # Attempting round variant
+        self.complete_button.pack(side=tk.RIGHT, padx=2)
+        ToolTip(self.complete_button, text="Mark as Complete")
 
-        # Reschedule Button - Subtask instruction 4
+        # Reschedule Button - Corrected Instruction 3
         self.reschedule_button = bs.Button(self.button_frame_ref,
-                                       text="🔄", # Keep icon
-                                       command=self.reschedule_task, # Keep command
-                                       bootstyle="primary") # Change bootstyle to "primary"
-        self.reschedule_button.pack(side=tk.RIGHT, padx=2) # Verify packing
-        ToolTip(self.reschedule_button, text="Reschedule (+15m)") # Keep ToolTip
+                                       text="🔄",
+                                       command=self.reschedule_task,
+                                       bootstyle="secondary-round") # Attempting round variant
+        self.reschedule_button.pack(side=tk.RIGHT, padx=2)
+        ToolTip(self.reschedule_button, text="Reschedule (+15m)")
 
     def _update_countdown(self): # Ensure this method and its logic are intact
         if self.remaining_work_seconds > 0:
