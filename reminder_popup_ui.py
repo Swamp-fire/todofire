@@ -37,25 +37,25 @@ class ReminderPopupUI(bs.Toplevel):
 
         self._setup_ui()
 
-        # CRITICAL: Call to _update_countdown() REMAINS COMMENTED OUT for this step
-        # if self.remaining_work_seconds > 0:
-        #     self._update_countdown()
+        # Restore _update_countdown() call
+        if self.remaining_work_seconds > 0:
+            self._update_countdown()
 
-        logger.info(f"ReminderPopupUI (Thinner Geometry Test) created for task ID: {self.task.id if self.task else 'N/A'}")
-        # CRITICAL: TTS calls in __init__ REMAINS COMMENTED OUT for this step
-        # try:
-        #     if self.task and self.task.title:
-        #         speech_text = f"Reminder for task: {self.task.title}"
-        #         logger.info(f"Popup: Requesting TTS for: '{speech_text}'")
-        #         tts_manager.speak(speech_text)
-        #     elif self.task:
-        #         logger.warning(f"Popup: Task ID {self.task.id if self.task else 'N/A'} has no title. Speaking generic reminder.")
-        #         tts_manager.speak("Reminder for task with no title.")
-        #     else:
-        #         logger.error("Popup: Task details are unavailable for TTS. Speaking generic error.")
-        #         tts_manager.speak("Reminder triggered, but task details are unavailable.", error_context=True)
-        # except Exception as e:
-        #     logger.error(f"CRITICAL: Unexpected error initiating TTS from ReminderPopupUI: {e}", exc_info=True)
+        logger.info(f"ReminderPopupUI created for task ID: {self.task.id if self.task else 'N/A'}")
+        # Restore TTS calls in __init__
+        try:
+            if self.task and self.task.title:
+                speech_text = f"Reminder for task: {self.task.title}"
+                logger.info(f"Popup: Requesting TTS for: '{speech_text}'")
+                tts_manager.speak(speech_text)
+            elif self.task:
+                logger.warning(f"Popup: Task ID {self.task.id if self.task else 'N/A'} has no title. Speaking generic reminder.")
+                tts_manager.speak("Reminder for task with no title.")
+            else:
+                logger.error("Popup: Task details are unavailable for TTS. Speaking generic error.")
+                tts_manager.speak("Reminder triggered, but task details are unavailable.", error_context=True)
+        except Exception as e:
+            logger.error(f"CRITICAL: Unexpected error initiating TTS from ReminderPopupUI: {e}", exc_info=True)
 
     def _setup_ui(self):
         self.main_frame = bs.Frame(self, padding=(5,3,5,3)) # Adjusted padding
@@ -112,39 +112,46 @@ class ReminderPopupUI(bs.Toplevel):
 
         # Button Frame Setup
         self.button_frame_ref = bs.Frame(self.main_frame)
-        self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2), ipady=2) # Adjusted pady and ipady
+        # Apply debug bootstyle as per subtask instruction 2.a
+        self.button_frame_ref.configure(bootstyle="danger")
+        # Confirm packing as per subtask instruction 2.b
+        self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2), ipady=2)
 
-        # Buttons use default styles (no explicit bootstyle or style)
+        # Expand Button - Subtask instruction 3
         self.expand_button = bs.Button(self.button_frame_ref,
-                                   text="▼",
-                                   command=self.toggle_expand_popup,
-                                   bootstyle="info-outline-round") # Apply round style
-        self.expand_button.pack(side=tk.LEFT, padx=2)
-        ToolTip(self.expand_button, text="More Info")
+                                   text="▼",  # Keep icon
+                                   command=self.toggle_expand_popup, # Keep command
+                                   bootstyle="info") # Change bootstyle to "info"
+        self.expand_button.pack(side=tk.LEFT, padx=2) # Verify packing
+        ToolTip(self.expand_button, text="More Info") # Keep ToolTip
 
         # Action buttons packed to the right (visual order from right to left: skip, complete, reschedule)
+
+        # Skip Button - Subtask instruction 6 (order adjusted for right-to-left packing logic)
         self.skip_button = bs.Button(self.button_frame_ref,
-                                   text="⏩",
-                                   command=self.skip_reminder,
-                                   bootstyle="secondary-round") # Apply round style
-        self.skip_button.pack(side=tk.RIGHT, padx=(2,0)) # Adjusted padx
-        ToolTip(self.skip_button, text="Skip Reminder")
+                                   text="⏩",  # Keep icon
+                                   command=self.skip_reminder, # Keep command
+                                   bootstyle="secondary") # Change bootstyle to "secondary"
+        self.skip_button.pack(side=tk.RIGHT, padx=(2,0)) # Verify packing
+        ToolTip(self.skip_button, text="Skip Reminder") # Keep ToolTip
 
+        # Complete Button - Subtask instruction 5
         self.complete_button = bs.Button(self.button_frame_ref,
-                                     text="✔️",
-                                     command=self.complete_task,
-                                     bootstyle="success-round") # Apply round style
-        self.complete_button.pack(side=tk.RIGHT, padx=2) # Adjusted padx
-        ToolTip(self.complete_button, text="Mark as Complete")
+                                     text="✔️", # Keep icon
+                                     command=self.complete_task, # Keep command
+                                     bootstyle="success") # Change bootstyle to "success"
+        self.complete_button.pack(side=tk.RIGHT, padx=2) # Verify packing
+        ToolTip(self.complete_button, text="Mark as Complete") # Keep ToolTip
 
+        # Reschedule Button - Subtask instruction 4
         self.reschedule_button = bs.Button(self.button_frame_ref,
-                                       text="🔄",
-                                       command=self.reschedule_task,
-                                       bootstyle="warning-round") # Apply round style
-        self.reschedule_button.pack(side=tk.RIGHT, padx=2) # Adjusted padx
-        ToolTip(self.reschedule_button, text="Reschedule (+15m)")
+                                       text="🔄", # Keep icon
+                                       command=self.reschedule_task, # Keep command
+                                       bootstyle="primary") # Change bootstyle to "primary"
+        self.reschedule_button.pack(side=tk.RIGHT, padx=2) # Verify packing
+        ToolTip(self.reschedule_button, text="Reschedule (+15m)") # Keep ToolTip
 
-    def _update_countdown(self):
+    def _update_countdown(self): # Ensure this method and its logic are intact
         if self.remaining_work_seconds > 0:
             hours = self.remaining_work_seconds // 3600
             minutes = (self.remaining_work_seconds % 3600) // 60
