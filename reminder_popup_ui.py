@@ -116,37 +116,37 @@ class ReminderPopupUI(bs.Toplevel):
         # Packing remains:
         self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2), ipady=2)
 
-        # Expand Button - Corrected Instruction 2
+        # Expand Button - Instruction 5: Keep as "info-outline-round"
         self.expand_button = bs.Button(self.button_frame_ref,
                                    text="▼",
                                    command=self.toggle_expand_popup,
-                                   bootstyle="info-outline-round") # Attempting round variant
+                                   bootstyle="info-outline-round") # Keeping round variant
         self.expand_button.pack(side=tk.LEFT, padx=2)
         ToolTip(self.expand_button, text="More Info")
 
         # Action buttons packed to the right (visual order from right to left: skip, complete, reschedule)
 
-        # Skip Button - Corrected Instruction 5
+        # Skip Button - Instruction 4: Change to "secondary"
         self.skip_button = bs.Button(self.button_frame_ref,
                                    text="⏩",
                                    command=self.skip_reminder,
-                                   bootstyle="secondary-round") # Attempting round variant
+                                   bootstyle="secondary") # Basic solid style
         self.skip_button.pack(side=tk.RIGHT, padx=(2,0))
         ToolTip(self.skip_button, text="Skip Reminder")
 
-        # Complete Button - Corrected Instruction 4
+        # Complete Button - Instruction 3: Change to "success"
         self.complete_button = bs.Button(self.button_frame_ref,
                                      text="✔️",
                                      command=self.complete_task,
-                                     bootstyle="secondary-round") # Attempting round variant
+                                     bootstyle="success") # Basic solid style
         self.complete_button.pack(side=tk.RIGHT, padx=2)
         ToolTip(self.complete_button, text="Mark as Complete")
 
-        # Reschedule Button - Corrected Instruction 3
+        # Reschedule Button - Instruction 2: Change to "warning"
         self.reschedule_button = bs.Button(self.button_frame_ref,
                                        text="🔄",
                                        command=self.reschedule_task,
-                                       bootstyle="secondary-round") # Attempting round variant
+                                       bootstyle="warning") # Basic solid style
         self.reschedule_button.pack(side=tk.RIGHT, padx=2)
         ToolTip(self.reschedule_button, text="Reschedule (+15m)")
 
