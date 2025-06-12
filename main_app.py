@@ -602,16 +602,57 @@ class TaskManagerApp:
 
             if self.currently_editing_task_id is not None:
                 logger.info(f"Attempting to update task ID: {self.currently_editing_task_id}")
-                original_task_for_update = database_manager.get_task(conn_save, self.currently_editing_task_id)
 
-                updated_creation_date = original_task_for_update.creation_date if original_task_for_update else datetime.datetime.now().isoformat()
-                updated_last_reset_date = original_task_for_update.last_reset_date if original_task_for_update else datetime.date.today().isoformat()
-                current_status = original_task_for_update.status if original_task_for_update else "Pending"
+                # Fetch the original task from the database (Instruction 3.a)
+                task_before_edit = None
+                # conn_fetch is distinct from conn_save; using conn_save for this fetch
+                try:
+                    task_before_edit = database_manager.get_task(conn_save, self.currently_editing_task_id)
+                except Exception as e_fetch:
+                    logger.error(f"Error fetching original task {self.currently_editing_task_id} for status check: {e_fetch}", exc_info=True)
+                    # No need to close conn_save here, will be closed in outer finally
+
+                if task_before_edit is None:
+                    logger.error(f"Original task (ID: {self.currently_editing_task_id}) not found. Cannot proceed with update or status check.")
+                    if not self.headless_mode:
+                        messagebox.showerror("Error", "Original task not found. Update failed.", parent=self.root)
+                    return # Critical error, cannot proceed
+
+                # Status Reset Logic (Instruction 4.a)
+                # Determine the status to be saved
+                status_to_save = task_before_edit.status # Default to original status
+
+                # task_due_datetime_iso is the new due date string from the form (or None if cleared/invalid)
+                new_due_date_iso_from_form = task_due_datetime_iso
+
+                if task_before_edit.status == 'Completed':
+                    original_due_date_iso = task_before_edit.due_date
+
+                    is_due_date_changed = (original_due_date_iso != new_due_date_iso_from_form)
+
+                    if is_due_date_changed:
+                        status_to_save = 'Pending'
+                        logger.info(f"Task ID {task_before_edit.id} ('{task_before_edit.title}') was 'Completed'. "
+                                    f"Due date changed from '{original_due_date_iso}' to '{new_due_date_iso_from_form}'. "
+                                    f"Status auto-reverted to 'Pending'.")
+                        if not self.headless_mode:
+                            try:
+                                messagebox.showinfo("Status Changed",
+                                                  f"Task '{task_before_edit.title}' status has been reset to 'Pending' "
+                                                  "because its due date was changed.",
+                                                  parent=self.root)
+                            except tk.TclError: # Should not happen if not headless
+                                logger.warning("Status Changed messagebox failed in UI mode.")
+
+                # Use task_before_edit for creation_date and last_reset_date
+                updated_creation_date = task_before_edit.creation_date
+                updated_last_reset_date = task_before_edit.last_reset_date
+                # current_status is now status_to_save
 
                 task_data_obj = Task(id=self.currently_editing_task_id, title=title_value, description=description,
                                  duration=task_duration_total_minutes, creation_date=updated_creation_date,
-                                 repetition=current_task_repetition, priority=priority, category=category, # Use current_task_repetition
-                                 due_date=task_due_datetime_iso, status=current_status,
+                                 repetition=current_task_repetition, priority=priority, category=category,
+                                 due_date=new_due_date_iso_from_form, status=status_to_save, # Use status_to_save and new_due_date
                                  last_reset_date=updated_last_reset_date)
                 success = database_manager.update_task(conn_save, task_data_obj)
                 if success:
