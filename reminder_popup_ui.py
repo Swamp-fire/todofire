@@ -310,27 +310,36 @@ class ReminderPopupUI(bs.Toplevel):
                 self.toggle_expand_popup() # Collapse description if open
                 print(f"DEBUG: WRAPPING: After toggle_expand_popup, self.is_expanded = {self.is_expanded}")
 
-            # Hide normal content
-            print(f"DEBUG: WRAPPING: Attempting to pack_forget top_content_frame, button_frame_ref, desc_frame.")
-            if hasattr(self, 'top_content_frame') and self.top_content_frame.winfo_ismapped():
-                 self.top_content_frame.pack_forget()
-            print(f"DEBUG: WRAPPING: top_content_frame forgotten. Is mapped: {self.top_content_frame.winfo_ismapped() if hasattr(self.top_content_frame, 'winfo_exists') and self.top_content_frame.winfo_exists() else 'N/A'}")
-
+            # Hide normal content (button_frame_ref and desc_frame)
+            print(f"DEBUG: WRAPPING: Attempting to pack_forget button_frame_ref, desc_frame.")
             if hasattr(self, 'button_frame_ref') and self.button_frame_ref.winfo_ismapped():
                  self.button_frame_ref.pack_forget()
             print(f"DEBUG: WRAPPING: button_frame_ref forgotten. Is mapped: {self.button_frame_ref.winfo_ismapped() if hasattr(self.button_frame_ref, 'winfo_exists') and self.button_frame_ref.winfo_exists() else 'N/A'}")
 
-            if hasattr(self, 'desc_frame') and self.desc_frame.winfo_ismapped(): # Ensure desc_frame is also hidden
+            if hasattr(self, 'desc_frame') and self.desc_frame.winfo_ismapped():
                  self.desc_frame.pack_forget()
             print(f"DEBUG: WRAPPING: desc_frame forgotten. Is mapped: {self.desc_frame.winfo_ismapped() if hasattr(self.desc_frame, 'winfo_exists') and self.desc_frame.winfo_exists() else 'N/A'}")
 
-            if hasattr(self, 'duration_display_frame'):
-                print(f"DEBUG: WRAPPING: Repacking duration_display_frame. Current parent: {self.duration_display_frame.winfo_parent() if hasattr(self.duration_display_frame, 'winfo_exists') and self.duration_display_frame.winfo_exists() else 'N/A'}")
-                self.duration_display_frame.pack_forget()
-                self.duration_display_frame.pack(in_=self.main_frame, expand=True, fill=tk.BOTH, padx=5, pady=5)
-                print(f"DEBUG: WRAPPING: duration_display_frame repacked into self.main_frame. New parent: {self.duration_display_frame.winfo_parent() if hasattr(self.duration_display_frame, 'winfo_exists') and self.duration_display_frame.winfo_exists() else 'N/A'}")
+            # Modify layout within top_content_frame
+            if hasattr(self, 'top_content_frame'):
+                print(f"DEBUG: WRAPPING: Modifying layout within top_content_frame.")
+                if hasattr(self, 'title_label') and self.title_label.winfo_ismapped():
+                    self.title_label.pack_forget()
+                print(f"DEBUG: WRAPPING: title_label forgotten. Is mapped: {self.title_label.winfo_ismapped() if hasattr(self.title_label, 'winfo_exists') and self.title_label.winfo_exists() else 'N/A'}")
+
+                if hasattr(self, 'duration_display_frame'):
+                    self.duration_display_frame.pack_forget() # Forget current packing
+                    self.duration_display_frame.pack(in_=self.top_content_frame, anchor='center', expand=True, fill='both', padx=0, pady=0) # Centered, minimal padding
+                    print(f"DEBUG: WRAPPING: duration_display_frame repacked in top_content_frame (centered). Parent: {self.duration_display_frame.winfo_parent() if hasattr(self.duration_display_frame, 'winfo_exists') and self.duration_display_frame.winfo_exists() else 'N/A'}")
+                else:
+                    print(f"DEBUG: WRAPPING: duration_display_frame not found.")
+
+                # Ensure top_content_frame itself now fills main_frame to control overall size
+                self.top_content_frame.pack_forget()
+                self.top_content_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=0, pady=0)
+                print(f"DEBUG: WRAPPING: top_content_frame repacked to fill main_frame.")
             else:
-                print(f"DEBUG: WRAPPING: duration_display_frame not found.")
+                print(f"DEBUG: WRAPPING: top_content_frame not found.")
 
             new_x = self._calculate_corner_x()
             new_y = self._calculate_corner_y()
