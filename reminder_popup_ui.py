@@ -392,23 +392,31 @@ class ReminderPopupUI(bs.Toplevel):
             self._on_mouse_release_binding_id = self.bind("<ButtonRelease-1>", self._on_mouse_release)
             self._on_mouse_drag_binding_id = self.bind("<B1-Motion>", self._on_mouse_drag)
 
-            if hasattr(self, 'duration_display_frame'):
-                print(f"DEBUG: UNWRAPPING: Forgetting duration_display_frame from current parent ({self.duration_display_frame.winfo_parent() if hasattr(self.duration_display_frame, 'winfo_exists') and self.duration_display_frame.winfo_exists() else 'N/A'}).")
-                self.duration_display_frame.pack_forget()
-            else:
-                print(f"DEBUG: UNWRAPPING: duration_display_frame not found.")
-
-            print(f"DEBUG: UNWRAPPING: Re-packing original frames (top_content_frame, button_frame_ref).")
+            # Restore layout within top_content_frame
             if hasattr(self, 'top_content_frame'):
-                self.top_content_frame.pack(side=tk.TOP, fill=tk.X, pady=(0,2), anchor='n')
-                if hasattr(self, 'duration_display_frame'): # Re-attach duration_display_frame to top_content_frame
-                    self.duration_display_frame.pack(in_=self.top_content_frame, side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0))
-                print(f"DEBUG: UNWRAPPING: top_content_frame repacked. duration_display_frame parent: {self.duration_display_frame.winfo_parent() if hasattr(self.duration_display_frame, 'winfo_exists') and self.duration_display_frame.winfo_exists() else 'N/A'}")
+                print(f"DEBUG: UNWRAPPING: Restoring layout within top_content_frame.")
+                if hasattr(self, 'duration_display_frame') and self.duration_display_frame.winfo_ismapped(): # It should be mapped within top_content_frame
+                    self.duration_display_frame.pack_forget()
+                print(f"DEBUG: UNWRAPPING: duration_display_frame forgotten from top_content_frame.")
+
+                if hasattr(self, 'title_label'): # Add this check for robustness
+                    self.title_label.pack(in_=self.top_content_frame, side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
+                    print(f"DEBUG: UNWRAPPING: title_label repacked into top_content_frame. Is mapped: {self.title_label.winfo_ismapped()}") # Debug print
+
+                if hasattr(self, 'duration_display_frame'):
+                    self.duration_display_frame.pack(in_=self.top_content_frame, side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0)) # Original packing for duration_display_frame
+                print(f"DEBUG: UNWRAPPING: duration_display_frame repacked into top_content_frame (original). Parent: {self.duration_display_frame.winfo_parent() if hasattr(self.duration_display_frame, 'winfo_exists') and self.duration_display_frame.winfo_exists() else 'N/A'}")
+
+                # Restore top_content_frame's own packing in main_frame
+                self.top_content_frame.pack_forget() # Ensure it's removed from fill=BOTH if it was set
+                self.top_content_frame.pack(side=tk.TOP, fill=tk.X, pady=(0,2), anchor='n') # Original packing for top_content_frame in main_frame
+                print(f"DEBUG: UNWRAPPING: top_content_frame's own packing restored in main_frame.")
             else:
                 print(f"DEBUG: UNWRAPPING: top_content_frame not found.")
 
+            # Re-pack button_frame_ref (desc_frame is handled by toggle_expand_popup)
             if hasattr(self, 'button_frame_ref'):
-                 self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2), ipady=2)
+                 self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2), ipady=2) # Original packing
             print(f"DEBUG: UNWRAPPING: button_frame_ref repacked. Is mapped: {self.button_frame_ref.winfo_ismapped() if hasattr(self.button_frame_ref, 'winfo_exists') and self.button_frame_ref.winfo_exists() else 'N/A'}")
 
             restored_geometry = f"{self.width}x{self.initial_height}"
