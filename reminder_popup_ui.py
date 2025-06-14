@@ -20,8 +20,9 @@ class ReminderPopupUI(bs.Toplevel):
         self.is_wrapped = False
         self.wrapped_width = 100
         self.wrapped_height = 40
-        self.expanded_state_before_wrap = False # Instruction 1.a
-        self._unwrap_binding_id = None # Instruction 1.c
+        self.expanded_state_before_wrap = False
+        self._unwrap_binding_id = None
+        self.nag_tts_after_id = None # Instruction 1.a
 
         self.width = 380 # Ensure target width
         self.initial_height = 90  # Target "thinner" value
@@ -47,9 +48,10 @@ class ReminderPopupUI(bs.Toplevel):
 
         self._setup_ui()
 
-        # Restore _update_countdown() call
-        if self.remaining_work_seconds > 0:
-            self._update_countdown()
+        # Automatic countdown start removed. User must click "Start".
+        # if self.remaining_work_seconds > 0:
+        #     # self._update_countdown() # Countdown now starts manually
+        #     pass
 
         logger.info(f"ReminderPopupUI created for task ID: {self.task.id if self.task else 'N/A'}")
         # Restore TTS calls in __init__
@@ -66,6 +68,8 @@ class ReminderPopupUI(bs.Toplevel):
                 tts_manager.speak("Reminder triggered, but task details are unavailable.", error_context=True)
         except Exception as e:
             logger.error(f"CRITICAL: Unexpected error initiating TTS from ReminderPopupUI: {e}", exc_info=True)
+
+        self._schedule_nag_tts() # Instruction 1.b
 
     def _setup_ui(self):
         # Ensure these are initialized for Instruction 1.d
@@ -145,6 +149,13 @@ class ReminderPopupUI(bs.Toplevel):
         self.wrap_button.pack(side=tk.LEFT, padx=2)
         ToolTip(self.wrap_button, text="Minimize to Corner")
 
+        # Start Button (New)
+        self.start_button = bs.Button(self.button_frame_ref, text="▶ Start",
+                                       command=self.start_countdown_action,
+                                       bootstyle="success-outline")
+        self.start_button.pack(side=tk.LEFT, padx=2)
+        ToolTip(self.start_button, text="Start Work Session Timer")
+
         # Action buttons packed to the right (visual order from right to left: skip, complete, reschedule)
 
         # Skip Button - Instruction 4: Change to "secondary"
@@ -194,6 +205,7 @@ class ReminderPopupUI(bs.Toplevel):
         # pass
 
     def reschedule_task(self):
+        self._cancel_nag_tts() # Instruction 4.b
         task_id_info = self.task.id if self.task else "N/A"
         logger.debug(f"POPUP_ACTION: Attempting 'reschedule' callback for task ID: {task_id_info}.")
         if self.app_callbacks and 'reschedule' in self.app_callbacks:
@@ -207,6 +219,7 @@ class ReminderPopupUI(bs.Toplevel):
         self._cleanup_and_destroy()
 
     def complete_task(self):
+        self._cancel_nag_tts() # Instruction 4.c
         task_id_info = self.task.id if self.task else "N/A"
         logger.debug(f"POPUP_ACTION: Attempting 'complete' callback for task ID: {task_id_info}.")
         if self.app_callbacks and 'complete' in self.app_callbacks:
@@ -220,15 +233,19 @@ class ReminderPopupUI(bs.Toplevel):
         self._cleanup_and_destroy()
 
     def skip_reminder(self):
+        self._cancel_nag_tts() # Instruction 4.d
         logger.debug(f"POPUP_ACTION: 'skip_reminder' called for task ID: {self.task.id if self.task else 'N/A'}. Closing popup.")
         self._cleanup_and_destroy()
 
     def _cleanup_and_destroy(self):
         task_id_info = self.task.id if self.task else "N/A" # For logging before task might be None
         logger.debug(f"POPUP_CLEANUP: Cleaning up for task ID {task_id_info}")
+
         if hasattr(self, 'after_id') and self.after_id:
             self.after_cancel(self.after_id)
             self.after_id = None
+
+        self._cancel_nag_tts() # Instruction 4.e
 
         if hasattr(self, 'app_callbacks') and self.app_callbacks and 'remove_from_active' in self.app_callbacks:
             try:
@@ -309,6 +326,9 @@ class ReminderPopupUI(bs.Toplevel):
                 print(f"DEBUG: WRAPPING: Currently expanded, calling self.toggle_expand_popup() to collapse.")
                 self.toggle_expand_popup() # Collapse description if open
                 print(f"DEBUG: WRAPPING: After toggle_expand_popup, self.is_expanded = {self.is_expanded}")
+
+            self._cancel_nag_tts() # Instruction 4.f (cancelling on wrap)
+            print(f"DEBUG: WRAPPING: Called _cancel_nag_tts().")
 
             # Hide normal content (button_frame_ref and desc_frame)
             print(f"DEBUG: WRAPPING: Attempting to pack_forget button_frame_ref, desc_frame.")
@@ -436,6 +456,50 @@ class ReminderPopupUI(bs.Toplevel):
 
         logger.debug(f"toggle_wrap_view finished. is_wrapped: {self.is_wrapped}")
         print(f"DEBUG: toggle_wrap_view EXIT: self.is_wrapped={self.is_wrapped}, current geometry={self.geometry()}")
+
+    def start_countdown_action(self):
+        logger.debug(f"POPUP_ACTION: 'start_countdown_action' called for task ID: {self.task.id if self.task else 'N/A'}.")
+
+        # Call placeholder for cancelling nag TTS (to be implemented in next step)
+        self._cancel_nag_tts() # Instruction 4.a
+
+        if self.remaining_work_seconds > 0:
+            self._update_countdown()
+
+        if hasattr(self, 'start_button'):
+            self.start_button.config(state=tk.DISABLED)
+            ToolTip(self.start_button, text="Timer Started") # Update tooltip
+
+        # Potentially hide other buttons or change their state if needed
+        # For example, maybe disable reschedule/skip once started? For now, just disable Start.
+
+    def _schedule_nag_tts(self): # Instruction 2
+        if not self.winfo_exists(): # Don't reschedule if window is destroyed
+            return
+
+        nag_interval_ms = 20000  # 20 seconds
+        task_title = self.task.title if self.task and self.task.title else "untitled task"
+        tts_message = f"Sir, time for task {task_title}, please start work."
+
+        logger.debug(f"POPUP_NAG: Scheduling TTS nag in {nag_interval_ms}ms: '{tts_message}'")
+
+        # Ensure any previous nag is cancelled before scheduling a new one
+        if self.nag_tts_after_id:
+            self.after_cancel(self.nag_tts_after_id)
+            self.nag_tts_after_id = None
+
+        self.nag_tts_after_id = self.after(nag_interval_ms, lambda: [
+            tts_manager.speak(tts_message),
+            self._schedule_nag_tts() # Reschedule itself
+        ])
+
+    def _cancel_nag_tts(self): # Instruction 3
+        if self.nag_tts_after_id:
+            logger.debug(f"POPUP_NAG: Cancelling TTS nag ID: {self.nag_tts_after_id}")
+            self.after_cancel(self.nag_tts_after_id)
+            self.nag_tts_after_id = None
+        else:
+            logger.debug("POPUP_NAG: No active TTS nag to cancel.")
 
 
 if __name__ == '__main__':
