@@ -92,6 +92,29 @@ class ReminderPopupUI(bs.Toplevel):
 
         self._schedule_nag_tts() # Instruction 1.b
 
+    def _calculate_tinted_color(self, hex_color, factor=0.5):
+        try:
+            hex_color = hex_color.lstrip('#')
+            r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+            # Calculate luminance to decide whether to lighten or darken
+            # Using a common luminance formula
+            luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+
+            if luminance < 0.5: # If dark, lighten
+                new_r = int(r + (255 - r) * factor)
+                new_g = int(g + (255 - g) * factor)
+                new_b = int(b + (255 - b) * factor)
+            else: # If light, darken
+                new_r = int(r * (1 - factor))
+                new_g = int(g * (1 - factor))
+                new_b = int(b * (1 - factor))
+
+            return f"#{new_r:02x}{new_g:02x}{new_b:02x}"
+        except Exception as e:
+            logger.error(f"Error calculating tinted color for {hex_color}: {e}")
+            return None # Fallback
+
     def _setup_ui(self):
         # Ensure these are initialized for Instruction 1.d
         self.countdown_label = None
@@ -156,15 +179,20 @@ class ReminderPopupUI(bs.Toplevel):
             style = ttk.Style(self)
             # Lookup the actual background of the Toplevel window
             popup_bg = style.lookup('Toplevel', 'background')
+            tinted_bg = self._calculate_tinted_color(popup_bg, factor=0.5)
 
-            custom_frame_style_name = "TransparentFrame.TFrame"
-            style.configure(custom_frame_style_name, background=popup_bg)
+            if not tinted_bg: # Fallback if tint calculation failed
+                tinted_bg = "#808080" # A neutral grey
+                logger.warning(f"Tinted color calculation failed, using fallback {tinted_bg} for button_frame_ref")
+
+            custom_frame_style_name = "TintedButtonFrame.TFrame" # New distinct name
+            style.configure(custom_frame_style_name, background=tinted_bg) # Use tinted_bg
 
             self.button_frame_ref.configure(style=custom_frame_style_name)
-            logger.debug(f"Applied style '{custom_frame_style_name}' with background '{popup_bg}' to button_frame_ref.")
+            logger.debug(f"Applied style '{custom_frame_style_name}' with tinted background '{tinted_bg}' to button_frame_ref.")
 
         except tk.TclError as e:
-            logger.warning(f"Could not apply custom background style '{custom_frame_style_name}' to button_frame_ref: {e}")
+            logger.warning(f"Could not apply custom background style 'TintedButtonFrame.TFrame' to button_frame_ref: {e}")
             # Fallback code can remain as is.
             try:
                 current_theme = self.tk.call("ttk::style", "theme", "use")
