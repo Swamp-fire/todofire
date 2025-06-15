@@ -160,15 +160,14 @@ class ReminderPopupUI(bs.Toplevel):
             self.expand_button = bs.Button(self.button_frame_ref,
                                        image=self.img_expand,
                                        command=self.toggle_expand_popup,
-                                       borderwidth=0, highlightthickness=0)
+                                       bootstyle="info-link")
             self.expand_button.pack(side=tk.LEFT, padx=2)
             ToolTip(self.expand_button, text="More Info")
         else:
             self.expand_button = bs.Button(self.button_frame_ref,
                                        text="▼", # Fallback text
                                        command=self.toggle_expand_popup,
-                                       bootstyle="info-outline-round", # Fallback style
-                                       borderwidth=0, highlightthickness=0)
+                                       bootstyle="info-outline-round") # Fallback style
             self.expand_button.pack(side=tk.LEFT, padx=2)
             ToolTip(self.expand_button, text="More Info (img err)")
 
@@ -177,14 +176,13 @@ class ReminderPopupUI(bs.Toplevel):
             self.wrap_button = bs.Button(self.button_frame_ref,
                                            image=self.img_wrap,
                                            command=self.toggle_wrap_view,
-                                           borderwidth=0, highlightthickness=0)
+                                           bootstyle="info-link")
             self.wrap_button.pack(side=tk.LEFT, padx=2)
             ToolTip(self.wrap_button, text="Minimize to Corner")
         else:
             self.wrap_button = bs.Button(self.button_frame_ref, text="↘️",
                                            command=self.toggle_wrap_view,
-                                           bootstyle="info-outline-round",
-                                           borderwidth=0, highlightthickness=0)
+                                           bootstyle="info-outline-round")
             self.wrap_button.pack(side=tk.LEFT, padx=2)
             ToolTip(self.wrap_button, text="Minimize to Corner (img err)")
 
@@ -193,14 +191,13 @@ class ReminderPopupUI(bs.Toplevel):
             self.start_button = bs.Button(self.button_frame_ref,
                                            image=self.img_start,
                                            command=self.start_countdown_action,
-                                           borderwidth=0, highlightthickness=0)
+                                           bootstyle="success-link")
             self.start_button.pack(side=tk.LEFT, padx=2)
             ToolTip(self.start_button, text="Start Work Session Timer")
         else:
             self.start_button = bs.Button(self.button_frame_ref, text="▶ Start",
                                            command=self.start_countdown_action,
-                                           bootstyle="success-outline",
-                                           borderwidth=0, highlightthickness=0)
+                                           bootstyle="success-outline")
             self.start_button.pack(side=tk.LEFT, padx=2)
             ToolTip(self.start_button, text="Start Work Session Timer (img err)")
 
@@ -211,15 +208,14 @@ class ReminderPopupUI(bs.Toplevel):
             self.skip_button = bs.Button(self.button_frame_ref,
                                        image=self.img_skip,
                                        command=self.skip_reminder,
-                                       borderwidth=0, highlightthickness=0)
+                                       bootstyle="secondary-link")
             self.skip_button.pack(side=tk.RIGHT, padx=(2,0))
             ToolTip(self.skip_button, text="Skip Reminder")
         else:
             self.skip_button = bs.Button(self.button_frame_ref,
                                        text="⏩",
                                        command=self.skip_reminder,
-                                       bootstyle="secondary",
-                                       borderwidth=0, highlightthickness=0)
+                                       bootstyle="secondary")
             self.skip_button.pack(side=tk.RIGHT, padx=(2,0))
             ToolTip(self.skip_button, text="Skip Reminder (img err)")
 
@@ -228,15 +224,14 @@ class ReminderPopupUI(bs.Toplevel):
             self.complete_button = bs.Button(self.button_frame_ref,
                                          image=self.img_complete,
                                          command=self.complete_task,
-                                         borderwidth=0, highlightthickness=0)
+                                         bootstyle="success-link")
             self.complete_button.pack(side=tk.RIGHT, padx=2)
             ToolTip(self.complete_button, text="Mark as Complete")
         else:
             self.complete_button = bs.Button(self.button_frame_ref,
                                          text="✔️",
                                          command=self.complete_task,
-                                         bootstyle="success",
-                                         borderwidth=0, highlightthickness=0)
+                                         bootstyle="success")
             self.complete_button.pack(side=tk.RIGHT, padx=2)
             ToolTip(self.complete_button, text="Mark as Complete (img err)")
 
@@ -245,15 +240,14 @@ class ReminderPopupUI(bs.Toplevel):
             self.reschedule_button = bs.Button(self.button_frame_ref,
                                            image=self.img_reschedule,
                                            command=self.reschedule_task,
-                                           borderwidth=0, highlightthickness=0)
+                                           bootstyle="warning-link")
             self.reschedule_button.pack(side=tk.RIGHT, padx=2)
             ToolTip(self.reschedule_button, text="Reschedule (+15m)")
         else:
             self.reschedule_button = bs.Button(self.button_frame_ref,
                                            text="🔄",
                                            command=self.reschedule_task,
-                                           bootstyle="warning",
-                                           borderwidth=0, highlightthickness=0)
+                                           bootstyle="warning")
             self.reschedule_button.pack(side=tk.RIGHT, padx=2)
             ToolTip(self.reschedule_button, text="Reschedule (+15m) (img err)")
 
