@@ -180,7 +180,7 @@ class ReminderPopupUI(bs.Toplevel):
                                font=("Helvetica", 14, "bold"),
                                wraplength=(self.width - 140), # Adjust wraplength if needed due to checkbox
                                anchor="w", justify=tk.LEFT, padding=(0,0,0,2))
-        self.title_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5)) # Original packing for title
+        self.title_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0,5)) # Original packing for title
 
         # Duration_display_frame (remains on the right)
         self.duration_display_frame = bs.Frame(self.top_content_frame)
