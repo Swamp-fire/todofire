@@ -327,7 +327,7 @@ class ReminderPopupUI(bs.Toplevel):
                 self.toggle_expand_popup() # Collapse description if open
                 print(f"DEBUG: WRAPPING: After toggle_expand_popup, self.is_expanded = {self.is_expanded}")
 
-            self._cancel_nag_tts() # Instruction 4.f (cancelling on wrap)
+            # self._cancel_nag_tts() # Instruction 4.f (cancelling on wrap)
             print(f"DEBUG: WRAPPING: Called _cancel_nag_tts().")
 
             # Hide normal content (button_frame_ref and desc_frame)
