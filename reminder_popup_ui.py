@@ -151,7 +151,35 @@ class ReminderPopupUI(bs.Toplevel):
 
         # Button Frame Setup
         self.button_frame_ref = bs.Frame(self.main_frame)
-        # Removed: self.button_frame_ref.configure(bootstyle="danger") (Subtask Instruction 2)
+
+        try:
+            # Get the background color of the Toplevel window itself
+            # Style needs to be configured on the root/parent for Toplevel
+            style = ttk.Style(self)
+            popup_bg = style.lookup('Toplevel', 'background')
+
+            # Define a new custom style for button_frame_ref that uses this background
+            # Using a unique name for the style to avoid conflicts.
+            custom_frame_style_name = f"ButtonFrameBackground.TFrame"
+            style.configure(custom_frame_style_name, background=popup_bg)
+
+            # Apply the custom style to button_frame_ref
+            self.button_frame_ref.configure(style=custom_frame_style_name)
+            logger.debug(f"Attempted to set button_frame_ref background to: {popup_bg}")
+
+        except tk.TclError as e:
+            logger.warning(f"Could not apply custom background style to button_frame_ref: {e}")
+            # Fallback: try to apply a theme-consistent style if direct styling fails
+            # This might not achieve perfect transparency but could improve consistency.
+            try:
+                current_theme = self.tk.call("ttk::style", "theme", "use")
+                if "dark" in current_theme.lower() or "solar" in current_theme.lower(): # Example dark themes
+                    self.button_frame_ref.configure(bootstyle="dark") # Or another appropriate dark style component
+                else: # Example light themes
+                    self.button_frame_ref.configure(bootstyle="light") # Or another appropriate light style component
+            except tk.TclError as e_fallback:
+                logger.warning(f"Could not apply fallback theme bootstyle to button_frame_ref: {e_fallback}")
+
         # Packing remains:
         self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2), ipady=2)
 
@@ -167,7 +195,7 @@ class ReminderPopupUI(bs.Toplevel):
             self.expand_button = bs.Button(self.button_frame_ref,
                                        text="▼", # Fallback text
                                        command=self.toggle_expand_popup,
-                                       bootstyle="info-outline-round") # Fallback style
+                                       bootstyle="info-link") # Fallback style, now link
             self.expand_button.pack(side=tk.LEFT, padx=2)
             ToolTip(self.expand_button, text="More Info (img err)")
 
@@ -182,7 +210,7 @@ class ReminderPopupUI(bs.Toplevel):
         else:
             self.wrap_button = bs.Button(self.button_frame_ref, text="↘️",
                                            command=self.toggle_wrap_view,
-                                           bootstyle="info-outline-round")
+                                           bootstyle="info-link")
             self.wrap_button.pack(side=tk.LEFT, padx=2)
             ToolTip(self.wrap_button, text="Minimize to Corner (img err)")
 
@@ -197,7 +225,7 @@ class ReminderPopupUI(bs.Toplevel):
         else:
             self.start_button = bs.Button(self.button_frame_ref, text="▶ Start",
                                            command=self.start_countdown_action,
-                                           bootstyle="success-outline")
+                                           bootstyle="success-link")
             self.start_button.pack(side=tk.LEFT, padx=2)
             ToolTip(self.start_button, text="Start Work Session Timer (img err)")
 
@@ -215,7 +243,7 @@ class ReminderPopupUI(bs.Toplevel):
             self.skip_button = bs.Button(self.button_frame_ref,
                                        text="⏩",
                                        command=self.skip_reminder,
-                                       bootstyle="secondary")
+                                       bootstyle="secondary-link")
             self.skip_button.pack(side=tk.RIGHT, padx=(2,0))
             ToolTip(self.skip_button, text="Skip Reminder (img err)")
 
@@ -231,7 +259,7 @@ class ReminderPopupUI(bs.Toplevel):
             self.complete_button = bs.Button(self.button_frame_ref,
                                          text="✔️",
                                          command=self.complete_task,
-                                         bootstyle="success")
+                                         bootstyle="success-link")
             self.complete_button.pack(side=tk.RIGHT, padx=2)
             ToolTip(self.complete_button, text="Mark as Complete (img err)")
 
@@ -247,7 +275,7 @@ class ReminderPopupUI(bs.Toplevel):
             self.reschedule_button = bs.Button(self.button_frame_ref,
                                            text="🔄",
                                            command=self.reschedule_task,
-                                           bootstyle="warning")
+                                           bootstyle="warning-link")
             self.reschedule_button.pack(side=tk.RIGHT, padx=2)
             ToolTip(self.reschedule_button, text="Reschedule (+15m) (img err)")
 
