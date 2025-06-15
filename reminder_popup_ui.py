@@ -13,35 +13,34 @@ class ReminderPopupUI(bs.Toplevel):
 
         # Placeholder for image loading - actual image files would be needed
         # Ensure an 'assets' directory exists with these images or adjust paths.
-        try:
-            self.img_expand = tk.PhotoImage(file="assets/more_info_round.png")
-            self.img_wrap = tk.PhotoImage(file="assets/minimize_round.png")
-            self.img_start = tk.PhotoImage(file="assets/start_round.png")
-            self.img_skip = tk.PhotoImage(file="assets/skip_round.png")
-            # self.img_complete = tk.PhotoImage(file="assets/complete_round.png") # Removed
-            self.img_reschedule = tk.PhotoImage(file="assets/reschedule_round.png")
-            self.img_checkbox_unchecked = tk.PhotoImage(file="assets/checkbox_round_unchecked.png")
-            self.img_checkbox_checked = tk.PhotoImage(file="assets/checkbox_round_checked.png")
+        # try:
+            # self.img_expand = tk.PhotoImage(file="assets/more_info_round.png")
+            # self.img_wrap = tk.PhotoImage(file="assets/minimize_round.png")
+            # self.img_start = tk.PhotoImage(file="assets/start_round.png")
+            # self.img_skip = tk.PhotoImage(file="assets/skip_round.png")
+            # self.img_reschedule = tk.PhotoImage(file="assets/reschedule_round.png")
+            # self.img_checkbox_unchecked = tk.PhotoImage(file="assets/checkbox_round_unchecked.png")
+            # self.img_checkbox_checked = tk.PhotoImage(file="assets/checkbox_round_checked.png")
             # Add hover/pressed images if planned, e.g., self.img_start_hover
-        except tk.TclError as e:
-            logger.error(f"Error loading placeholder button images: {e}. Ensure 'assets' folder and dummy PNGs exist.")
+        # except tk.TclError as e:
+            # logger.error(f"Error loading placeholder button images: {e}. Ensure 'assets' folder and dummy PNGs exist.")
             # Fallback or default images could be set here if desired
-            self.img_expand = None # Or some default tk.PhotoImage
-            self.img_wrap = None
-            self.img_start = None
-            self.img_skip = None
-            # self.img_complete = None # Removed
-            self.img_reschedule = None
-            logger.error(f"Error loading checkbox images: {e}. Using None for checkbox images.")
-            self.img_checkbox_unchecked = None
-            self.img_checkbox_checked = None
+            # self.img_expand = None # Or some default tk.PhotoImage
+            # self.img_wrap = None
+            # self.img_start = None
+            # self.img_skip = None
+            # self.img_reschedule = None
+            # logger.error(f"Error loading checkbox images: {e}. Using None for checkbox images.")
+            # self.img_checkbox_unchecked = None
+            # self.img_checkbox_checked = None
 
         self.overrideredirect(True)
         self.task = task
         self.app_callbacks = app_callbacks
         self.after_id = None
         self.is_expanded = False # Kept for toggle_expand_popup text change
-        self.checkbox_is_checked = False
+        # self.checkbox_is_checked = False # Removed
+        self.complete_var = tk.BooleanVar()
         self._drag_offset_x = 0
         self._drag_offset_y = 0
         self.is_wrapped = False
@@ -98,25 +97,34 @@ class ReminderPopupUI(bs.Toplevel):
 
         self._schedule_nag_tts() # Instruction 1.b
 
-    def _on_checkbox_click(self, event=None):
-        if not self.checkbox_is_checked: # Only proceed if not already checked
-            self.checkbox_is_checked = True # Mark as checked
+    def _on_complete_checkbutton_change(self):
+        if self.complete_var.get(): # If checked
+            # Prevent unchecking from re-triggering or if action is one-way
+            if hasattr(self, 'complete_checkbutton') and self.complete_checkbutton.winfo_exists():
+                self.complete_checkbutton.config(state=tk.DISABLED) # Disable after first check
 
-            # Update image to checked state, if images are loaded
-            if self.img_checkbox_checked and hasattr(self, 'complete_checkbox_label'):
-                self.complete_checkbox_label.config(image=self.img_checkbox_checked)
-            elif hasattr(self, 'complete_checkbox_label'): # Fallback text update
-                self.complete_checkbox_label.config(text="[X]")
+            self.complete_task() # Call the original method
+        # No action needed if unchecked, as completion is usually a one-way street for this app
 
-
-            # Call the original complete_task method
-            # complete_task() will handle logging, callbacks, and destroying the popup
-            self.complete_task()
-            # No need to worry about disabling, as complete_task destroys the window.
-        else:
-            # Optionally, could allow unchecking if complete_task didn't destroy window
-            # For now, once checked and popup closes, it's done.
-            logger.debug("Checkbox already considered checked and task completion initiated.")
+    # def _on_checkbox_click(self, event=None): # Removed
+    #     if not self.checkbox_is_checked: # Only proceed if not already checked
+    #         self.checkbox_is_checked = True # Mark as checked
+    #
+    #         # Update image to checked state, if images are loaded
+    #         if self.img_checkbox_checked and hasattr(self, 'complete_checkbox_label'):
+    #             self.complete_checkbox_label.config(image=self.img_checkbox_checked)
+    #         elif hasattr(self, 'complete_checkbox_label'): # Fallback text update
+    #             self.complete_checkbox_label.config(text="[X]")
+    #
+    #
+    #         # Call the original complete_task method
+    #         # complete_task() will handle logging, callbacks, and destroying the popup
+    #         self.complete_task()
+    #         # No need to worry about disabling, as complete_task destroys the window.
+    #     else:
+    #         # Optionally, could allow unchecking if complete_task didn't destroy window
+    #         # For now, once checked and popup closes, it's done.
+    #         logger.debug("Checkbox already considered checked and task completion initiated.")
 
     def _calculate_tinted_color(self, hex_color, factor=0.5):
         try:
@@ -153,34 +161,19 @@ class ReminderPopupUI(bs.Toplevel):
         self.top_content_frame = bs.Frame(self.main_frame)
         self.top_content_frame.pack(side=tk.TOP, fill=tk.X, pady=(0,2), anchor='n')
 
-        # New Round Checkbox for Completing Task (RELOCATED)
-        initial_checkbox_image = self.img_checkbox_unchecked # Assuming self.img_checkbox_unchecked is loaded in __init__
-        fallback_text = "[ ]"
-
-        if not initial_checkbox_image:
-            self.complete_checkbox_label = tk.Label(self.top_content_frame, text=fallback_text, font=("Helvetica", 12))
-            # Optionally, use bs.Label with a link style for theme consistency:
-            # self.complete_checkbox_label = bs.Label(self.top_content_frame, text=fallback_text, bootstyle="secondary-link")
-            logger.info("Fallback text checkbox created in top_content_frame as image failed.")
-        else:
-            self.complete_checkbox_label = tk.Label(self.top_content_frame, image=initial_checkbox_image)
-            try:
-                # Attempt to make tk.Label background match its new parent (top_content_frame)
-                parent_bg = self.top_content_frame.cget("background")
-                self.complete_checkbox_label.config(bg=parent_bg)
-            except tk.TclError:
-                logger.warning("Could not match checkbox label bg to top_content_frame bg.")
-
-        self.complete_checkbox_label.pack(side=tk.LEFT, padx=(0, 5)) # Pack checkbox to the left first
-        self.complete_checkbox_label.bind("<Button-1>", self._on_checkbox_click)
-        ToolTip(self.complete_checkbox_label, text="Mark as Complete")
+        self.complete_checkbutton = bs.Checkbutton(self.top_content_frame,
+                                               variable=self.complete_var,
+                                               command=self._on_complete_checkbutton_change,
+                                               bootstyle="success") # New style
+        self.complete_checkbutton.pack(side=tk.LEFT, padx=(0, 5))
+        ToolTip(self.complete_checkbutton, text="Mark as Complete")
 
         # Title_label (packed after checkbox)
         self.title_label = bs.Label(self.top_content_frame, text=(self.task.title if self.task and self.task.title else "No Title"),
                                font=("Helvetica", 14, "bold"),
-                               wraplength=(self.width - 140), # Adjust wraplength if needed due to checkbox
+                               wraplength=(self.width - 140), # Adjusted for checkbutton
                                anchor="w", justify=tk.LEFT, padding=(0,0,0,2))
-        self.title_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0,5)) # Original packing for title
+        self.title_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0,5))
 
         # Duration_display_frame (remains on the right)
         self.duration_display_frame = bs.Frame(self.top_content_frame)
@@ -227,84 +220,44 @@ class ReminderPopupUI(bs.Toplevel):
         self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2), ipady=2)
 
         # Expand Button
-        if self.img_expand:
-            self.expand_button = bs.Button(self.button_frame_ref,
-                                       image=self.img_expand,
-                                       command=self.toggle_expand_popup,
-                                       bootstyle="info-link")
-            self.expand_button.pack(side=tk.LEFT, padx=2)
-            ToolTip(self.expand_button, text="More Info")
-        else:
-            self.expand_button = bs.Button(self.button_frame_ref,
-                                       text="▼", # Fallback text
-                                       command=self.toggle_expand_popup,
-                                       bootstyle="info-link") # Fallback style, now link
-            self.expand_button.pack(side=tk.LEFT, padx=2)
-            ToolTip(self.expand_button, text="More Info (img err)")
+        self.expand_button = bs.Button(self.button_frame_ref,
+                                   text="▼",
+                                   command=self.toggle_expand_popup,
+                                   bootstyle="info-outline-round")
+        self.expand_button.pack(side=tk.LEFT, padx=2)
+        ToolTip(self.expand_button, text="More Info")
 
         # Wrap Button
-        if self.img_wrap:
-            self.wrap_button = bs.Button(self.button_frame_ref,
-                                           image=self.img_wrap,
-                                           command=self.toggle_wrap_view,
-                                           bootstyle="info-link")
-            self.wrap_button.pack(side=tk.LEFT, padx=2)
-            ToolTip(self.wrap_button, text="Minimize to Corner")
-        else:
-            self.wrap_button = bs.Button(self.button_frame_ref, text="↘️",
-                                           command=self.toggle_wrap_view,
-                                           bootstyle="info-link")
-            self.wrap_button.pack(side=tk.LEFT, padx=2)
-            ToolTip(self.wrap_button, text="Minimize to Corner (img err)")
+        self.wrap_button = bs.Button(self.button_frame_ref, text="↘️",
+                                       command=self.toggle_wrap_view,
+                                       bootstyle="info-outline-round")
+        self.wrap_button.pack(side=tk.LEFT, padx=2)
+        ToolTip(self.wrap_button, text="Minimize to Corner")
 
         # Start Button
-        if self.img_start:
-            self.start_button = bs.Button(self.button_frame_ref,
-                                           image=self.img_start,
-                                           command=self.start_countdown_action,
-                                           bootstyle="success-link")
-            self.start_button.pack(side=tk.LEFT, padx=2)
-            ToolTip(self.start_button, text="Start Work Session Timer")
-        else:
-            self.start_button = bs.Button(self.button_frame_ref, text="▶ Start",
-                                           command=self.start_countdown_action,
-                                           bootstyle="success-link")
-            self.start_button.pack(side=tk.LEFT, padx=2)
-            ToolTip(self.start_button, text="Start Work Session Timer (img err)")
+        self.start_button = bs.Button(self.button_frame_ref, text="▶ Start",
+                                       command=self.start_countdown_action,
+                                       bootstyle="success-outline")
+        self.start_button.pack(side=tk.LEFT, padx=2)
+        ToolTip(self.start_button, text="Start Work Session Timer")
 
         # Action buttons packed to the right (visual order from right to left: skip, complete, reschedule)
 
         # Skip Button
-        if self.img_skip:
-            self.skip_button = bs.Button(self.button_frame_ref,
-                                       image=self.img_skip,
-                                       command=self.skip_reminder,
-                                       bootstyle="secondary-link")
-            self.skip_button.pack(side=tk.RIGHT, padx=(2,0))
-            ToolTip(self.skip_button, text="Skip Reminder")
-        else:
-            self.skip_button = bs.Button(self.button_frame_ref,
-                                       text="⏩",
-                                       command=self.skip_reminder,
-                                       bootstyle="secondary-link")
-            self.skip_button.pack(side=tk.RIGHT, padx=(2,0))
-            ToolTip(self.skip_button, text="Skip Reminder (img err)")
+        self.skip_button = bs.Button(self.button_frame_ref,
+                                   text="⏩",
+                                   command=self.skip_reminder,
+                                   bootstyle="secondary")
+        self.skip_button.pack(side=tk.RIGHT, padx=(2,0))
+        ToolTip(self.skip_button, text="Skip Reminder")
 
         # Reschedule Button
-        if self.img_reschedule:
-            self.reschedule_button = bs.Button(self.button_frame_ref,
-                                           image=self.img_reschedule,
-                                           command=self.reschedule_task,
-                                           bootstyle="warning-link")
-            self.reschedule_button.pack(side=tk.RIGHT, padx=2)
-            ToolTip(self.reschedule_button, text="Reschedule (+15m)")
-        else:
-            self.reschedule_button = bs.Button(self.button_frame_ref,
-                                           text="🔄",
-                                           command=self.reschedule_task,
-                                           bootstyle="warning-link")
-            self.reschedule_button.pack(side=tk.RIGHT, padx=2)
-            ToolTip(self.reschedule_button, text="Reschedule (+15m) (img err)")
+        self.reschedule_button = bs.Button(self.button_frame_ref,
+                                       text="🔄",
+                                       command=self.reschedule_task,
+                                       bootstyle="warning")
+        self.reschedule_button.pack(side=tk.RIGHT, padx=2)
+        ToolTip(self.reschedule_button, text="Reschedule (+15m)")
 
     def _update_countdown(self): # Ensure this method and its logic are intact
         if self.remaining_work_seconds > 0:
@@ -394,16 +347,14 @@ class ReminderPopupUI(bs.Toplevel):
 
             self.geometry(f"{self.width}x{self.expanded_height}")
             if hasattr(self, 'expand_button'):
-                # if not self.img_expand: # Only set text if not using image
-                #    self.expand_button.config(text="▲")
+                self.expand_button.config(text="▲")
                 ToolTip(self.expand_button, text="Less Info")
         else: # Collapsing
             if hasattr(self, 'desc_frame'):
                 self.desc_frame.pack_forget()
             self.geometry(f"{self.width}x{self.initial_height}")
             if hasattr(self, 'expand_button'):
-                # if not self.img_expand: # Only set text if not using image
-                #    self.expand_button.config(text="▼")
+                self.expand_button.config(text="▼")
                 ToolTip(self.expand_button, text="More Info")
 
     def _on_mouse_press(self, event):
@@ -511,8 +462,7 @@ class ReminderPopupUI(bs.Toplevel):
             print(f"DEBUG: WRAPPING: Unwrap click bound with ID: {self._unwrap_binding_id}")
 
             if hasattr(self, 'wrap_button'):
-                # if not self.img_wrap: # Only set text if not using image
-                #    self.wrap_button.config(text="↗️") # Change icon to "unwrap"
+                self.wrap_button.config(text="↗️") # Change icon to "unwrap"
                 ToolTip(self.wrap_button, text="Restore Full View")
             print(f"DEBUG: WRAPPING: Wrap button updated.")
 
@@ -577,8 +527,7 @@ class ReminderPopupUI(bs.Toplevel):
                 print(f"DEBUG: UNWRAPPING: After toggle_expand_popup, self.is_expanded = {self.is_expanded}")
 
             if hasattr(self, 'wrap_button'):
-                # if not self.img_wrap: # Only set text if not using image
-                #    self.wrap_button.config(text="↘️") # Change icon back to "wrap"
+                self.wrap_button.config(text="↘️") # Change icon back to "wrap"
                 ToolTip(self.wrap_button, text="Minimize to Corner")
             print(f"DEBUG: UNWRAPPING: Wrap button updated.")
 
