@@ -11,6 +11,15 @@ class ReminderPopupUI(bs.Toplevel):
     def __init__(self, parent, task, app_callbacks):
         super().__init__(parent)
 
+        try:
+            self.img_checkbox_empty = tk.PhotoImage(file="assets/checkbox_empty_box.png")
+            self.img_checkbox_checked_hover = tk.PhotoImage(file="assets/checkbox_box_with_check.png")
+            logger.info("Custom image-checkbox images loaded (or attempted).")
+        except tk.TclError as e:
+            logger.error(f"Error loading custom image-checkbox images: {e}.")
+            self.img_checkbox_empty = None
+            self.img_checkbox_checked_hover = None
+
         self.overrideredirect(True)
         self.task = task
         self.app_callbacks = app_callbacks
@@ -45,9 +54,6 @@ class ReminderPopupUI(bs.Toplevel):
         self.countdown_label = None
         self.no_duration_label = None
 
-        self.complete_var = tk.BooleanVar()
-        self.complete_var.set(False)
-
         self._setup_ui()
 
         logger.info(f"ReminderPopupUI created for task ID: {self.task.id if self.task else 'N/A'}")
@@ -67,21 +73,25 @@ class ReminderPopupUI(bs.Toplevel):
 
         self._schedule_nag_tts()
 
-    def _handle_complete_check(self):
-        if self.complete_var.get():
-            if hasattr(self, 'complete_checkbutton') and self.complete_checkbutton.winfo_exists():
-                self.complete_checkbutton.config(state=tk.DISABLED)
-            self.complete_task()
+    def _on_image_checkbox_click(self, event):
+        if self.img_checkbox_checked_hover and hasattr(self.complete_image_checkbox, 'config'):
+            self.complete_image_checkbox.config(image=self.img_checkbox_checked_hover)
+        elif hasattr(self.complete_image_checkbox, 'config'):
+             self.complete_image_checkbox.config(text="[X]")
 
-    def _on_complete_checkbutton_enter(self, event):
-        if hasattr(self, 'complete_checkbutton') and self.complete_checkbutton.winfo_exists():
-            if self.complete_var.get() is False:
-                self.complete_checkbutton.config(text="✔️")
+        self.complete_task()
 
-    def _on_complete_checkbutton_leave(self, event):
-        if hasattr(self, 'complete_checkbutton') and self.complete_checkbutton.winfo_exists():
-            if self.complete_var.get() is False:
-                 self.complete_checkbutton.config(text="")
+    def _on_image_checkbox_enter(self, event):
+        if self.img_checkbox_checked_hover and hasattr(self.complete_image_checkbox, 'config'):
+            self.complete_image_checkbox.config(image=self.img_checkbox_checked_hover)
+        elif hasattr(self.complete_image_checkbox, 'config'):
+            self.complete_image_checkbox.config(text="[✔️]")
+
+    def _on_image_checkbox_leave(self, event):
+        if self.img_checkbox_empty and hasattr(self.complete_image_checkbox, 'config'):
+            self.complete_image_checkbox.config(image=self.img_checkbox_empty)
+        elif hasattr(self.complete_image_checkbox, 'config'):
+             self.complete_image_checkbox.config(text="[ ]")
 
     def _calculate_tinted_color(self, hex_color, factor=0.5):
         try:
@@ -111,15 +121,23 @@ class ReminderPopupUI(bs.Toplevel):
         self.top_content_frame = bs.Frame(self.main_frame)
         self.top_content_frame.pack(side=tk.TOP, fill=tk.X, pady=(0,2), anchor='n')
 
-        self.complete_checkbutton = bs.Checkbutton(self.top_content_frame,
-                                               variable=self.complete_var,
-                                               command=self._handle_complete_check,
-                                               bootstyle="success",
-                                               text="")
-        self.complete_checkbutton.pack(side=tk.LEFT, padx=(0, 5))
-        ToolTip(self.complete_checkbutton, text="Mark as Complete")
-        self.complete_checkbutton.bind("<Enter>", self._on_complete_checkbutton_enter)
-        self.complete_checkbutton.bind("<Leave>", self._on_complete_checkbutton_leave)
+        if self.img_checkbox_empty:
+            self.complete_image_checkbox = tk.Label(self.top_content_frame, image=self.img_checkbox_empty)
+            try:
+                parent_bg = self.top_content_frame.cget("background")
+                self.complete_image_checkbox.config(bg=parent_bg, borderwidth=0, highlightthickness=0)
+            except tk.TclError:
+                logger.warning("Could not match complete_image_checkbox bg to parent or set border for image version.")
+                self.complete_image_checkbox.config(borderwidth=0, highlightthickness=0)
+        else:
+            self.complete_image_checkbox = tk.Label(self.top_content_frame, text="[ ]", font=("Helvetica", 10))
+            logger.info("Fallback text '[ ]' created for complete action as images failed to load.")
+
+        self.complete_image_checkbox.pack(side=tk.LEFT, padx=(0, 5))
+        ToolTip(self.complete_image_checkbox, text="Mark as Complete")
+        self.complete_image_checkbox.bind("<Button-1>", self._on_image_checkbox_click)
+        self.complete_image_checkbox.bind("<Enter>", self._on_image_checkbox_enter)
+        self.complete_image_checkbox.bind("<Leave>", self._on_image_checkbox_leave)
 
 
         title_text_clipper_frame = bs.Frame(self.top_content_frame)
@@ -349,13 +367,13 @@ class ReminderPopupUI(bs.Toplevel):
             if hasattr(self, 'top_content_frame'):
                 print(f"DEBUG: WRAPPING: Modifying layout within top_content_frame.")
 
-                if hasattr(self, 'complete_checkbutton') and self.complete_checkbutton.winfo_ismapped():
-                    self.complete_checkbutton.pack_forget()
+                if hasattr(self, 'complete_image_checkbox') and self.complete_image_checkbox.winfo_ismapped():
+                    self.complete_image_checkbox.pack_forget()
                 if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master.winfo_ismapped():
                     self.title_label.master.pack_forget()
 
 
-                print(f"DEBUG: WRAPPING: title_label's clipper and complete_checkbutton (if existing) forgotten.")
+                print(f"DEBUG: WRAPPING: title_label's clipper and complete_image_checkbox (if existing) forgotten.")
                 if hasattr(self, 'duration_display_frame'):
                     self.duration_display_frame.pack_forget()
                     self.duration_display_frame.pack(in_=self.top_content_frame, anchor='center', expand=True, fill='both', padx=0, pady=0)
@@ -415,8 +433,8 @@ class ReminderPopupUI(bs.Toplevel):
                     self.duration_display_frame.pack_forget()
                 print(f"DEBUG: UNWRAPPING: duration_display_frame forgotten from top_content_frame.")
 
-                if hasattr(self, 'complete_checkbutton'):
-                    self.complete_checkbutton.pack(side=tk.LEFT, padx=(0,5))
+                if hasattr(self, 'complete_image_checkbox') and self.complete_image_checkbox.winfo_exists(): # Check for new label name
+                    self.complete_image_checkbox.pack(side=tk.LEFT, padx=(0,5))
 
                 if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master != self.top_content_frame :
                     clipper = self.title_label.master
