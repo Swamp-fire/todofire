@@ -11,15 +11,6 @@ class ReminderPopupUI(bs.Toplevel):
     def __init__(self, parent, task, app_callbacks):
         super().__init__(parent)
 
-        try:
-            self.img_complete_circle_outline = tk.PhotoImage(file="assets/complete_circle_outline.png")
-            self.img_complete_circle_filled_check = tk.PhotoImage(file="assets/complete_circle_filled_check.png")
-            logger.info("Custom complete button images loaded (or attempted).")
-        except tk.TclError as e:
-            logger.error(f"Error loading custom complete button images: {e}. Using None for these images.")
-            self.img_complete_circle_outline = None
-            self.img_complete_circle_filled_check = None
-
         self.overrideredirect(True)
         self.task = task
         self.app_callbacks = app_callbacks
@@ -73,25 +64,21 @@ class ReminderPopupUI(bs.Toplevel):
 
         self._schedule_nag_tts()
 
-    def _on_complete_image_label_click(self, event):
-        if self.img_complete_circle_filled_check and hasattr(self.complete_image_label, 'config'):
-            self.complete_image_label.config(image=self.img_complete_circle_filled_check)
-        elif hasattr(self.complete_image_label, 'config'):
-             self.complete_image_label.config(text="[X]")
+    def _on_complete_button_enter(self, event):
+        if hasattr(self, 'complete_button') and self.complete_button.winfo_exists():
+            try:
+                self.complete_button.config(text="✔️", bootstyle="success-round")
+            except tk.TclError as e:
+                logger.error(f"Error applying hover style to complete_button: {e}")
+                self.complete_button.config(text="✔️")
 
-        self.complete_task()
-
-    def _on_complete_image_label_enter(self, event):
-        if self.img_complete_circle_filled_check and hasattr(self.complete_image_label, 'config'):
-            self.complete_image_label.config(image=self.img_complete_circle_filled_check)
-        elif hasattr(self.complete_image_label, 'config'):
-            self.complete_image_label.config(text="[✔️]")
-
-    def _on_complete_image_label_leave(self, event):
-        if self.img_complete_circle_outline and hasattr(self.complete_image_label, 'config'):
-            self.complete_image_label.config(image=self.img_complete_circle_outline)
-        elif hasattr(self.complete_image_label, 'config'):
-             self.complete_image_label.config(text="[✓]")
+    def _on_complete_button_leave(self, event):
+        if hasattr(self, 'complete_button') and self.complete_button.winfo_exists():
+            try:
+                self.complete_button.config(text="", bootstyle="success-outline-round")
+            except tk.TclError as e:
+                logger.error(f"Error reverting hover style for complete_button: {e}")
+                self.complete_button.config(text="")
 
     def _calculate_tinted_color(self, hex_color, factor=0.5):
         try:
@@ -121,23 +108,14 @@ class ReminderPopupUI(bs.Toplevel):
         self.top_content_frame = bs.Frame(self.main_frame)
         self.top_content_frame.pack(side=tk.TOP, fill=tk.X, pady=(0,2), anchor='n')
 
-        if self.img_complete_circle_outline:
-            self.complete_image_label = tk.Label(self.top_content_frame, image=self.img_complete_circle_outline)
-            try:
-                parent_bg = self.top_content_frame.cget("background")
-                self.complete_image_label.config(bg=parent_bg, borderwidth=0, highlightthickness=0)
-            except tk.TclError:
-                logger.warning("Could not match complete_image_label bg to parent or set border for image version.")
-                self.complete_image_label.config(borderwidth=0, highlightthickness=0)
-        else:
-            self.complete_image_label = tk.Label(self.top_content_frame, text="[✓]", font=("Helvetica", 10))
-            logger.info("Fallback text '[✓]' created for complete action as images failed to load.")
-
-        self.complete_image_label.pack(side=tk.LEFT, padx=(0, 5))
-        ToolTip(self.complete_image_label, text="Mark as Complete")
-        self.complete_image_label.bind("<Button-1>", self._on_complete_image_label_click)
-        self.complete_image_label.bind("<Enter>", self._on_complete_image_label_enter)
-        self.complete_image_label.bind("<Leave>", self._on_complete_image_label_leave)
+        self.complete_button = bs.Button(self.top_content_frame,
+                                         text="",
+                                         command=self.complete_task,
+                                         bootstyle="success-outline-round")
+        self.complete_button.pack(side=tk.LEFT, padx=(0, 5))
+        ToolTip(self.complete_button, text="Mark as Complete")
+        self.complete_button.bind("<Enter>", self._on_complete_button_enter)
+        self.complete_button.bind("<Leave>", self._on_complete_button_leave)
 
         title_text_clipper_frame = bs.Frame(self.top_content_frame)
         title_font = ("Helvetica", 14, "bold")
@@ -155,7 +133,7 @@ class ReminderPopupUI(bs.Toplevel):
         title_text_clipper_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
         title_text_clipper_frame.pack_propagate(False)
 
-        effective_wraplength = self.width - 150
+        effective_wraplength = self.width - 140 # Adjusted for complete button
 
         self.title_label = bs.Label(title_text_clipper_frame,
                                text=(self.task.title if self.task and self.task.title else "No Title"),
@@ -365,14 +343,15 @@ class ReminderPopupUI(bs.Toplevel):
             print(f"DEBUG: WRAPPING: desc_frame forgotten. Is mapped: {self.desc_frame.winfo_ismapped() if hasattr(self.desc_frame, 'winfo_exists') and self.desc_frame.winfo_exists() else 'N/A'}")
             if hasattr(self, 'top_content_frame'):
                 print(f"DEBUG: WRAPPING: Modifying layout within top_content_frame.")
-                # Correctly forget the clipper frame (title_label's parent)
-                if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master.winfo_ismapped():
-                    self.title_label.master.pack_forget()
-                # Also forget the complete button if it's directly in top_content_frame
-                if hasattr(self, 'complete_image_label') and self.complete_image_label.winfo_ismapped(): # Check for new label name
-                    self.complete_image_label.pack_forget()
 
-                print(f"DEBUG: WRAPPING: title_label and complete_image_label (if existing) forgotten.")
+                # Correctly forget the clipper frame (title_label's parent) and complete_image_label
+                if hasattr(self, 'complete_button') and self.complete_button.winfo_ismapped(): # Check for new label name
+                    self.complete_button.pack_forget()
+                if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master.winfo_ismapped(): # title_label.master is the clipper
+                    self.title_label.master.pack_forget()
+
+
+                print(f"DEBUG: WRAPPING: title_label's clipper and complete_image_label (if existing) forgotten.")
                 if hasattr(self, 'duration_display_frame'):
                     self.duration_display_frame.pack_forget()
                     self.duration_display_frame.pack(in_=self.top_content_frame, anchor='center', expand=True, fill='both', padx=0, pady=0)
@@ -432,13 +411,13 @@ class ReminderPopupUI(bs.Toplevel):
                     self.duration_display_frame.pack_forget()
                 print(f"DEBUG: UNWRAPPING: duration_display_frame forgotten from top_content_frame.")
 
-                if hasattr(self, 'complete_image_label'): # Check for new label name
-                    self.complete_image_label.pack(side=tk.LEFT, padx=(0,5))
+                if hasattr(self, 'complete_button'):
+                    self.complete_button.pack(side=tk.LEFT, padx=(0,5))
 
-                if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master != self.top_content_frame :
+                if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master != self.top_content_frame : # master is clipper
                     clipper = self.title_label.master
                     clipper.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
-                    # self.title_label is already packed in clipper, no need to re-pack here unless it was forgotten from clipper
+                    # self.title_label is already packed in clipper
                 elif hasattr(self, 'title_label'):
                      self.title_label.pack(in_=self.top_content_frame, side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
                 print(f"DEBUG: UNWRAPPING: title_label repacked. Is mapped: {self.title_label.winfo_ismapped() if hasattr(self, 'title_label') and self.title_label.winfo_exists() else 'N/A'}")
