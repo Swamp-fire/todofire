@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+import tkinter.font # Added
 import ttkbootstrap as bs
 from ttkbootstrap.tooltip import ToolTip
 from tts_manager import tts_manager
@@ -10,15 +11,6 @@ logger = logging.getLogger(__name__)
 class ReminderPopupUI(bs.Toplevel):
     def __init__(self, parent, task, app_callbacks):
         super().__init__(parent)
-
-        try:
-            self.img_checkbox_empty = tk.PhotoImage(file="assets/checkbox_empty_box.png")
-            self.img_checkbox_checked_hover = tk.PhotoImage(file="assets/checkbox_box_with_check.png")
-            logger.info("Custom image-checkbox images loaded (or attempted).")
-        except tk.TclError as e:
-            logger.error(f"Error loading custom image-checkbox images: {e}.")
-            self.img_checkbox_empty = None
-            self.img_checkbox_checked_hover = None
 
         self.overrideredirect(True)
         self.task = task
@@ -54,6 +46,9 @@ class ReminderPopupUI(bs.Toplevel):
         self.countdown_label = None
         self.no_duration_label = None
 
+        self.complete_var = tk.BooleanVar()
+        self.complete_var.set(False)
+
         self._setup_ui()
 
         logger.info(f"ReminderPopupUI created for task ID: {self.task.id if self.task else 'N/A'}")
@@ -73,25 +68,42 @@ class ReminderPopupUI(bs.Toplevel):
 
         self._schedule_nag_tts()
 
-    def _on_image_checkbox_click(self, event):
-        if self.img_checkbox_checked_hover and hasattr(self.complete_image_checkbox, 'config'):
-            self.complete_image_checkbox.config(image=self.img_checkbox_checked_hover)
-        elif hasattr(self.complete_image_checkbox, 'config'):
-             self.complete_image_checkbox.config(text="[X]")
+    def _handle_complete_toggle(self):
+        if self.complete_var.get():
+            if hasattr(self, 'complete_checkbutton') and self.complete_checkbutton.winfo_exists():
+                self.complete_checkbutton.config(state=tk.DISABLED)
+            self.complete_task()
 
-        self.complete_task()
+    def _truncate_text_to_fit(self, text, max_width_px, font_details):
+        if not text:
+            return ""
 
-    def _on_image_checkbox_enter(self, event):
-        if self.img_checkbox_checked_hover and hasattr(self.complete_image_checkbox, 'config'):
-            self.complete_image_checkbox.config(image=self.img_checkbox_checked_hover)
-        elif hasattr(self.complete_image_checkbox, 'config'):
-            self.complete_image_checkbox.config(text="[✔️]")
+        try:
+            font_obj = tkinter.font.Font(font=font_details)
+            current_text = str(text) # Ensure it's a string
+            text_width = font_obj.measure(current_text)
 
-    def _on_image_checkbox_leave(self, event):
-        if self.img_checkbox_empty and hasattr(self.complete_image_checkbox, 'config'):
-            self.complete_image_checkbox.config(image=self.img_checkbox_empty)
-        elif hasattr(self.complete_image_checkbox, 'config'):
-             self.complete_image_checkbox.config(text="[ ]")
+            if text_width <= max_width_px:
+                return current_text
+
+            ellipsis = "..."
+            ellipsis_width = font_obj.measure(ellipsis)
+
+            if ellipsis_width > max_width_px: # Cannot even fit ellipsis
+                return ""
+
+            # Iteratively shorten the text from the end
+            while len(current_text) > 0:
+                if font_obj.measure(current_text + ellipsis) <= max_width_px:
+                    return current_text + ellipsis
+                current_text = current_text[:-1]
+
+            # If loop finishes, it means only ellipsis can fit (or nothing)
+            return ellipsis
+
+        except Exception as e:
+            logger.error(f"Error in _truncate_text_to_fit for '{text}': {e}")
+            return str(text) # Fallback to original text if error
 
     def _calculate_tinted_color(self, hex_color, factor=0.5):
         try:
@@ -121,50 +133,26 @@ class ReminderPopupUI(bs.Toplevel):
         self.top_content_frame = bs.Frame(self.main_frame)
         self.top_content_frame.pack(side=tk.TOP, fill=tk.X, pady=(0,2), anchor='n')
 
-        if self.img_checkbox_empty:
-            self.complete_image_checkbox = tk.Label(self.top_content_frame, image=self.img_checkbox_empty)
-            try:
-                parent_bg = self.top_content_frame.cget("background")
-                self.complete_image_checkbox.config(bg=parent_bg, borderwidth=0, highlightthickness=0)
-            except tk.TclError:
-                logger.warning("Could not match complete_image_checkbox bg to parent or set border for image version.")
-                self.complete_image_checkbox.config(borderwidth=0, highlightthickness=0)
-        else:
-            self.complete_image_checkbox = tk.Label(self.top_content_frame, text="[ ]", font=("Helvetica", 10))
-            logger.info("Fallback text '[ ]' created for complete action as images failed to load.")
+        self.complete_checkbutton = bs.Checkbutton(self.top_content_frame,
+                                               variable=self.complete_var,
+                                               command=self._handle_complete_toggle,
+                                               bootstyle="success-round",
+                                               text="")
+        self.complete_checkbutton.pack(side=tk.LEFT, padx=(0, 5))
+        ToolTip(self.complete_checkbutton, text="Mark as Complete")
 
-        self.complete_image_checkbox.pack(side=tk.LEFT, padx=(0, 5))
-        ToolTip(self.complete_image_checkbox, text="Mark as Complete")
-        self.complete_image_checkbox.bind("<Button-1>", self._on_image_checkbox_click)
-        self.complete_image_checkbox.bind("<Enter>", self._on_image_checkbox_enter)
-        self.complete_image_checkbox.bind("<Leave>", self._on_image_checkbox_leave)
+        title_font_details = ("Helvetica", 14, "bold")
+        available_width_for_title = self.width - 135
 
+        task_title_text = str(self.task.title if self.task and self.task.title else "No Title")
+        display_title = self._truncate_text_to_fit(task_title_text, available_width_for_title, title_font_details)
 
-        title_text_clipper_frame = bs.Frame(self.top_content_frame)
-        title_font = ("Helvetica", 14, "bold")
-
-        try:
-            import tkinter.font
-            font_obj = tkinter.font.Font(font=title_font)
-            linespace = font_obj.metrics('linespace')
-            clipper_height = linespace + 2
-        except Exception:
-            clipper_height = 26
-            logger.warning("Could not get precise font metrics for title, using estimated clipper height.")
-
-        title_text_clipper_frame.configure(height=clipper_height)
-        title_text_clipper_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
-        title_text_clipper_frame.pack_propagate(False)
-
-        effective_wraplength = self.width - 140
-
-        self.title_label = bs.Label(title_text_clipper_frame,
-                               text=(self.task.title if self.task and self.task.title else "No Title"),
-                               font=title_font,
-                               wraplength=effective_wraplength,
-                               anchor="nw",
+        self.title_label = bs.Label(self.top_content_frame,
+                               text=display_title,
+                               font=title_font_details,
+                               anchor="w",
                                justify=tk.LEFT)
-        self.title_label.pack(side=tk.LEFT, padx=0, pady=0, fill=tk.X, expand=True)
+        self.title_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
 
 
         self.duration_display_frame = bs.Frame(self.top_content_frame)
@@ -367,13 +355,13 @@ class ReminderPopupUI(bs.Toplevel):
             if hasattr(self, 'top_content_frame'):
                 print(f"DEBUG: WRAPPING: Modifying layout within top_content_frame.")
 
-                if hasattr(self, 'complete_image_checkbox') and self.complete_image_checkbox.winfo_ismapped():
-                    self.complete_image_checkbox.pack_forget()
+                if hasattr(self, 'complete_checkbutton') and self.complete_checkbutton.winfo_ismapped():
+                    self.complete_checkbutton.pack_forget()
                 if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master.winfo_ismapped():
                     self.title_label.master.pack_forget()
 
 
-                print(f"DEBUG: WRAPPING: title_label's clipper and complete_image_checkbox (if existing) forgotten.")
+                print(f"DEBUG: WRAPPING: title_label's clipper and complete_checkbutton (if existing) forgotten.")
                 if hasattr(self, 'duration_display_frame'):
                     self.duration_display_frame.pack_forget()
                     self.duration_display_frame.pack(in_=self.top_content_frame, anchor='center', expand=True, fill='both', padx=0, pady=0)
@@ -433,14 +421,20 @@ class ReminderPopupUI(bs.Toplevel):
                     self.duration_display_frame.pack_forget()
                 print(f"DEBUG: UNWRAPPING: duration_display_frame forgotten from top_content_frame.")
 
-                if hasattr(self, 'complete_image_checkbox') and self.complete_image_checkbox.winfo_exists(): # Check for new label name
-                    self.complete_image_checkbox.pack(side=tk.LEFT, padx=(0,5))
+                if hasattr(self, 'complete_checkbutton'):
+                    self.complete_checkbutton.pack(side=tk.LEFT, padx=(0,5))
 
-                if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master != self.top_content_frame :
-                    clipper = self.title_label.master
-                    clipper.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
-                elif hasattr(self, 'title_label'):
-                     self.title_label.pack(in_=self.top_content_frame, side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
+                # Re-pack title_label directly into top_content_frame
+                if hasattr(self, 'title_label'):
+                    if self.title_label.master != self.top_content_frame: # If it was in a clipper
+                        self.title_label.destroy()
+                        self.title_label = bs.Label(self.top_content_frame,
+                                   text=(self.task.title if self.task and self.task.title else "No Title"),
+                                   font=("Helvetica", 14, "bold"),
+                                   wraplength=self.width - 140,
+                                   anchor="w",
+                                   justify=tk.LEFT)
+                    self.title_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
                 print(f"DEBUG: UNWRAPPING: title_label repacked. Is mapped: {self.title_label.winfo_ismapped() if hasattr(self, 'title_label') and self.title_label.winfo_exists() else 'N/A'}")
 
                 if hasattr(self, 'duration_display_frame'):
