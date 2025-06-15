@@ -45,9 +45,8 @@ class ReminderPopupUI(bs.Toplevel):
         self.countdown_label = None
         self.no_duration_label = None
 
-        # Will be fully defined in _setup_ui, including fallback logic
-        self.compact_outline_style_name = "CompactSuccessOutline.TButton"
-
+        self.complete_var = tk.BooleanVar()
+        self.complete_var.set(False)
 
         self._setup_ui()
 
@@ -68,27 +67,21 @@ class ReminderPopupUI(bs.Toplevel):
 
         self._schedule_nag_tts()
 
-    def _on_complete_button_enter(self, event):
-        if hasattr(self, 'complete_button') and self.complete_button.winfo_exists():
-            try:
-                self.complete_button.config(text="✔️", bootstyle="success-round")
-            except tk.TclError as e:
-                logger.error(f"Error applying hover bootstyle to complete_button: {e}")
-                self.complete_button.config(text="✔️")
+    def _handle_complete_check(self):
+        if self.complete_var.get():
+            if hasattr(self, 'complete_checkbutton') and self.complete_checkbutton.winfo_exists():
+                self.complete_checkbutton.config(state=tk.DISABLED)
+            self.complete_task()
 
-    def _on_complete_button_leave(self, event):
-        if hasattr(self, 'complete_button') and self.complete_button.winfo_exists():
-            try:
-                # Check if the custom style name is the one we attempted to define (not the fallback bootstyle name)
-                if ".TButton" in self.compact_outline_style_name: # Heuristic for custom style name
-                    # Attempt to apply the custom style
-                    ttk.Style(self).layout(self.compact_outline_style_name) # Check if style exists
-                    self.complete_button.config(text="", style=self.compact_outline_style_name)
-                else: # Fallback to using bootstyle if self.compact_outline_style_name holds a bootstyle string
-                    self.complete_button.config(text="", bootstyle=self.compact_outline_style_name)
-            except tk.TclError:
-                logger.warning(f"Failed to apply custom style '{self.compact_outline_style_name}' on leave, using default bootstyle.")
-                self.complete_button.config(text="", bootstyle="success-outline-round") # Safest fallback
+    def _on_complete_checkbutton_enter(self, event):
+        if hasattr(self, 'complete_checkbutton') and self.complete_checkbutton.winfo_exists():
+            if self.complete_var.get() is False:
+                self.complete_checkbutton.config(text="✔️")
+
+    def _on_complete_checkbutton_leave(self, event):
+        if hasattr(self, 'complete_checkbutton') and self.complete_checkbutton.winfo_exists():
+            if self.complete_var.get() is False:
+                 self.complete_checkbutton.config(text="")
 
     def _calculate_tinted_color(self, hex_color, factor=0.5):
         try:
@@ -118,55 +111,16 @@ class ReminderPopupUI(bs.Toplevel):
         self.top_content_frame = bs.Frame(self.main_frame)
         self.top_content_frame.pack(side=tk.TOP, fill=tk.X, pady=(0,2), anchor='n')
 
-        style = ttk.Style(self)
-        # self.compact_outline_style_name is already set in __init__
+        self.complete_checkbutton = bs.Checkbutton(self.top_content_frame,
+                                               variable=self.complete_var,
+                                               command=self._handle_complete_check,
+                                               bootstyle="success",
+                                               text="")
+        self.complete_checkbutton.pack(side=tk.LEFT, padx=(0, 5))
+        ToolTip(self.complete_checkbutton, text="Mark as Complete")
+        self.complete_checkbutton.bind("<Enter>", self._on_complete_checkbutton_enter)
+        self.complete_checkbutton.bind("<Leave>", self._on_complete_checkbutton_leave)
 
-        try:
-            default_bg = style.lookup("TFrame", "background")
-            success_fg = style.lookup("success.TButton", "foreground")
-            if not success_fg : success_fg = "#28a745" # Default success color
-            if not default_bg : default_bg = "#FFFFFF" # Default light background for TFrame
-
-            style.configure(self.compact_outline_style_name,
-                            padding=[2, 0, 2, 0],
-                            foreground=success_fg,
-                            background=default_bg,
-                            bordercolor=success_fg,
-                            borderwidth=1,
-                            relief="flat",
-                            focuscolor=success_fg,
-                            focusthickness=1
-                           )
-        except Exception as e:
-            logger.error(f"Error configuring compact outline style '{self.compact_outline_style_name}': {e}. Using default bootstyle as fallback.")
-            self.compact_outline_style_name = "success-outline-round"
-
-        use_custom_style_for_complete_button = True
-        if self.compact_outline_style_name == "success-outline-round": # Check if fallback was set
-             use_custom_style_for_complete_button = False
-        else:
-            try:
-                style.layout(self.compact_outline_style_name)
-            except tk.TclError:
-                use_custom_style_for_complete_button = False
-                logger.warning(f"Custom style '{self.compact_outline_style_name}' not found/valid. Falling back to bootstyle for complete_button.")
-                self.compact_outline_style_name = "success-outline-round" # Ensure it's the bootstyle name for hover_leave
-
-        if use_custom_style_for_complete_button:
-            self.complete_button = bs.Button(self.top_content_frame,
-                                             text="",
-                                             command=self.complete_task,
-                                             style=self.compact_outline_style_name)
-        else:
-            self.complete_button = bs.Button(self.top_content_frame,
-                                             text="",
-                                             command=self.complete_task,
-                                             bootstyle="success-outline-round")
-
-        self.complete_button.pack(side=tk.LEFT, padx=(0, 5))
-        ToolTip(self.complete_button, text="Mark as Complete")
-        self.complete_button.bind("<Enter>", self._on_complete_button_enter)
-        self.complete_button.bind("<Leave>", self._on_complete_button_leave)
 
         title_text_clipper_frame = bs.Frame(self.top_content_frame)
         title_font = ("Helvetica", 14, "bold")
@@ -395,13 +349,13 @@ class ReminderPopupUI(bs.Toplevel):
             if hasattr(self, 'top_content_frame'):
                 print(f"DEBUG: WRAPPING: Modifying layout within top_content_frame.")
 
-                if hasattr(self, 'complete_button') and self.complete_button.winfo_ismapped():
-                    self.complete_button.pack_forget()
+                if hasattr(self, 'complete_checkbutton') and self.complete_checkbutton.winfo_ismapped():
+                    self.complete_checkbutton.pack_forget()
                 if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master.winfo_ismapped():
                     self.title_label.master.pack_forget()
 
 
-                print(f"DEBUG: WRAPPING: title_label's clipper and complete_image_label (if existing) forgotten.")
+                print(f"DEBUG: WRAPPING: title_label's clipper and complete_checkbutton (if existing) forgotten.")
                 if hasattr(self, 'duration_display_frame'):
                     self.duration_display_frame.pack_forget()
                     self.duration_display_frame.pack(in_=self.top_content_frame, anchor='center', expand=True, fill='both', padx=0, pady=0)
@@ -461,8 +415,8 @@ class ReminderPopupUI(bs.Toplevel):
                     self.duration_display_frame.pack_forget()
                 print(f"DEBUG: UNWRAPPING: duration_display_frame forgotten from top_content_frame.")
 
-                if hasattr(self, 'complete_button'):
-                    self.complete_button.pack(side=tk.LEFT, padx=(0,5))
+                if hasattr(self, 'complete_checkbutton'):
+                    self.complete_checkbutton.pack(side=tk.LEFT, padx=(0,5))
 
                 if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master != self.top_content_frame :
                     clipper = self.title_label.master
