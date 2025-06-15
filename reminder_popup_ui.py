@@ -10,6 +10,27 @@ logger = logging.getLogger(__name__)
 class ReminderPopupUI(bs.Toplevel):
     def __init__(self, parent, task, app_callbacks):
         super().__init__(parent)
+
+        # Placeholder for image loading - actual image files would be needed
+        # Ensure an 'assets' directory exists with these images or adjust paths.
+        try:
+            self.img_expand = tk.PhotoImage(file="assets/more_info_round.png")
+            self.img_wrap = tk.PhotoImage(file="assets/minimize_round.png")
+            self.img_start = tk.PhotoImage(file="assets/start_round.png")
+            self.img_skip = tk.PhotoImage(file="assets/skip_round.png")
+            self.img_complete = tk.PhotoImage(file="assets/complete_round.png")
+            self.img_reschedule = tk.PhotoImage(file="assets/reschedule_round.png")
+            # Add hover/pressed images if planned, e.g., self.img_start_hover
+        except tk.TclError as e:
+            logger.error(f"Error loading placeholder button images: {e}. Ensure 'assets' folder and dummy PNGs exist.")
+            # Fallback or default images could be set here if desired
+            self.img_expand = None # Or some default tk.PhotoImage
+            self.img_wrap = None
+            self.img_start = None
+            self.img_skip = None
+            self.img_complete = None
+            self.img_reschedule = None
+
         self.overrideredirect(True)
         self.task = task
         self.app_callbacks = app_callbacks
@@ -134,53 +155,107 @@ class ReminderPopupUI(bs.Toplevel):
         # Packing remains:
         self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2), ipady=2)
 
-        # Expand Button - Instruction 5: Keep as "info-outline-round"
-        self.expand_button = bs.Button(self.button_frame_ref,
-                                   text="▼",
-                                   command=self.toggle_expand_popup,
-                                   bootstyle="info-outline-round") # Keeping round variant
-        self.expand_button.pack(side=tk.LEFT, padx=2)
-        ToolTip(self.expand_button, text="More Info")
+        # Expand Button
+        if self.img_expand:
+            self.expand_button = bs.Button(self.button_frame_ref,
+                                       image=self.img_expand,
+                                       command=self.toggle_expand_popup,
+                                       borderwidth=0, highlightthickness=0)
+            self.expand_button.pack(side=tk.LEFT, padx=2)
+            ToolTip(self.expand_button, text="More Info")
+        else:
+            self.expand_button = bs.Button(self.button_frame_ref,
+                                       text="▼", # Fallback text
+                                       command=self.toggle_expand_popup,
+                                       bootstyle="info-outline-round", # Fallback style
+                                       borderwidth=0, highlightthickness=0)
+            self.expand_button.pack(side=tk.LEFT, padx=2)
+            ToolTip(self.expand_button, text="More Info (img err)")
 
-        # Wrap Button - Instruction 2.b
-        self.wrap_button = bs.Button(self.button_frame_ref, text="↘️",
-                                       command=self.toggle_wrap_view,
-                                       bootstyle="info-outline-round")
-        self.wrap_button.pack(side=tk.LEFT, padx=2)
-        ToolTip(self.wrap_button, text="Minimize to Corner")
+        # Wrap Button
+        if self.img_wrap:
+            self.wrap_button = bs.Button(self.button_frame_ref,
+                                           image=self.img_wrap,
+                                           command=self.toggle_wrap_view,
+                                           borderwidth=0, highlightthickness=0)
+            self.wrap_button.pack(side=tk.LEFT, padx=2)
+            ToolTip(self.wrap_button, text="Minimize to Corner")
+        else:
+            self.wrap_button = bs.Button(self.button_frame_ref, text="↘️",
+                                           command=self.toggle_wrap_view,
+                                           bootstyle="info-outline-round",
+                                           borderwidth=0, highlightthickness=0)
+            self.wrap_button.pack(side=tk.LEFT, padx=2)
+            ToolTip(self.wrap_button, text="Minimize to Corner (img err)")
 
-        # Start Button (New)
-        self.start_button = bs.Button(self.button_frame_ref, text="▶ Start",
-                                       command=self.start_countdown_action,
-                                       bootstyle="success-outline")
-        self.start_button.pack(side=tk.LEFT, padx=2)
-        ToolTip(self.start_button, text="Start Work Session Timer")
+        # Start Button
+        if self.img_start:
+            self.start_button = bs.Button(self.button_frame_ref,
+                                           image=self.img_start,
+                                           command=self.start_countdown_action,
+                                           borderwidth=0, highlightthickness=0)
+            self.start_button.pack(side=tk.LEFT, padx=2)
+            ToolTip(self.start_button, text="Start Work Session Timer")
+        else:
+            self.start_button = bs.Button(self.button_frame_ref, text="▶ Start",
+                                           command=self.start_countdown_action,
+                                           bootstyle="success-outline",
+                                           borderwidth=0, highlightthickness=0)
+            self.start_button.pack(side=tk.LEFT, padx=2)
+            ToolTip(self.start_button, text="Start Work Session Timer (img err)")
 
         # Action buttons packed to the right (visual order from right to left: skip, complete, reschedule)
 
-        # Skip Button - Instruction 4: Change to "secondary"
-        self.skip_button = bs.Button(self.button_frame_ref,
-                                   text="⏩",
-                                   command=self.skip_reminder,
-                                   bootstyle="secondary") # Basic solid style
-        self.skip_button.pack(side=tk.RIGHT, padx=(2,0))
-        ToolTip(self.skip_button, text="Skip Reminder")
+        # Skip Button
+        if self.img_skip:
+            self.skip_button = bs.Button(self.button_frame_ref,
+                                       image=self.img_skip,
+                                       command=self.skip_reminder,
+                                       borderwidth=0, highlightthickness=0)
+            self.skip_button.pack(side=tk.RIGHT, padx=(2,0))
+            ToolTip(self.skip_button, text="Skip Reminder")
+        else:
+            self.skip_button = bs.Button(self.button_frame_ref,
+                                       text="⏩",
+                                       command=self.skip_reminder,
+                                       bootstyle="secondary",
+                                       borderwidth=0, highlightthickness=0)
+            self.skip_button.pack(side=tk.RIGHT, padx=(2,0))
+            ToolTip(self.skip_button, text="Skip Reminder (img err)")
 
-        # Complete Button - Instruction 3: Change to "success"
-        self.complete_button = bs.Button(self.button_frame_ref,
-                                     text="✔️",
-                                     command=self.complete_task,
-                                     bootstyle="success") # Basic solid style
-        self.complete_button.pack(side=tk.RIGHT, padx=2)
-        ToolTip(self.complete_button, text="Mark as Complete")
+        # Complete Button
+        if self.img_complete:
+            self.complete_button = bs.Button(self.button_frame_ref,
+                                         image=self.img_complete,
+                                         command=self.complete_task,
+                                         borderwidth=0, highlightthickness=0)
+            self.complete_button.pack(side=tk.RIGHT, padx=2)
+            ToolTip(self.complete_button, text="Mark as Complete")
+        else:
+            self.complete_button = bs.Button(self.button_frame_ref,
+                                         text="✔️",
+                                         command=self.complete_task,
+                                         bootstyle="success",
+                                         borderwidth=0, highlightthickness=0)
+            self.complete_button.pack(side=tk.RIGHT, padx=2)
+            ToolTip(self.complete_button, text="Mark as Complete (img err)")
 
-        # Reschedule Button - Instruction 2: Change to "warning"
-        self.reschedule_button = bs.Button(self.button_frame_ref,
-                                       text="🔄",
-                                       command=self.reschedule_task,
-                                       bootstyle="warning") # Basic solid style
-        self.reschedule_button.pack(side=tk.RIGHT, padx=2)
-        ToolTip(self.reschedule_button, text="Reschedule (+15m)")
+        # Reschedule Button
+        if self.img_reschedule:
+            self.reschedule_button = bs.Button(self.button_frame_ref,
+                                           image=self.img_reschedule,
+                                           command=self.reschedule_task,
+                                           borderwidth=0, highlightthickness=0)
+            self.reschedule_button.pack(side=tk.RIGHT, padx=2)
+            ToolTip(self.reschedule_button, text="Reschedule (+15m)")
+        else:
+            self.reschedule_button = bs.Button(self.button_frame_ref,
+                                           text="🔄",
+                                           command=self.reschedule_task,
+                                           bootstyle="warning",
+                                           borderwidth=0, highlightthickness=0)
+            self.reschedule_button.pack(side=tk.RIGHT, padx=2)
+            ToolTip(self.reschedule_button, text="Reschedule (+15m) (img err)")
 
     def _update_countdown(self): # Ensure this method and its logic are intact
         if self.remaining_work_seconds > 0:
@@ -270,14 +345,16 @@ class ReminderPopupUI(bs.Toplevel):
 
             self.geometry(f"{self.width}x{self.expanded_height}")
             if hasattr(self, 'expand_button'):
-                self.expand_button.config(text="▲")
+                # if not self.img_expand: # Only set text if not using image
+                #    self.expand_button.config(text="▲")
                 ToolTip(self.expand_button, text="Less Info")
         else: # Collapsing
             if hasattr(self, 'desc_frame'):
                 self.desc_frame.pack_forget()
             self.geometry(f"{self.width}x{self.initial_height}")
             if hasattr(self, 'expand_button'):
-                self.expand_button.config(text="▼")
+                # if not self.img_expand: # Only set text if not using image
+                #    self.expand_button.config(text="▼")
                 ToolTip(self.expand_button, text="More Info")
 
     def _on_mouse_press(self, event):
@@ -385,7 +462,8 @@ class ReminderPopupUI(bs.Toplevel):
             print(f"DEBUG: WRAPPING: Unwrap click bound with ID: {self._unwrap_binding_id}")
 
             if hasattr(self, 'wrap_button'):
-                self.wrap_button.config(text="↗️") # Change icon to "unwrap"
+                # if not self.img_wrap: # Only set text if not using image
+                #    self.wrap_button.config(text="↗️") # Change icon to "unwrap"
                 ToolTip(self.wrap_button, text="Restore Full View")
             print(f"DEBUG: WRAPPING: Wrap button updated.")
 
@@ -450,7 +528,8 @@ class ReminderPopupUI(bs.Toplevel):
                 print(f"DEBUG: UNWRAPPING: After toggle_expand_popup, self.is_expanded = {self.is_expanded}")
 
             if hasattr(self, 'wrap_button'):
-                self.wrap_button.config(text="↘️") # Change icon back to "wrap"
+                # if not self.img_wrap: # Only set text if not using image
+                #    self.wrap_button.config(text="↘️") # Change icon back to "wrap"
                 ToolTip(self.wrap_button, text="Minimize to Corner")
             print(f"DEBUG: UNWRAPPING: Wrap button updated.")
 
