@@ -30,12 +30,11 @@ class ReminderPopupUI(bs.Toplevel):
         self.initial_height = 90
         self.expanded_height = 215
 
-        self.remaining_work_seconds = 0
-        if self.task and self.task.duration and self.task.duration > 0:
-            self.remaining_work_seconds = self.task.duration * 60
+        # self.remaining_work_seconds = 0 # Still commented out
+        # if self.task and self.task.duration and self.task.duration > 0:
+        #     self.remaining_work_seconds = self.task.duration * 60
 
         self.geometry(f"{self.width}x{self.initial_height}+100+100")
-
         self.wm_attributes("-topmost", 1)
         self.resizable(False, False)
 
@@ -43,30 +42,19 @@ class ReminderPopupUI(bs.Toplevel):
         self._on_mouse_release_binding_id = self.bind("<ButtonRelease-1>", self._on_mouse_release)
         self._on_mouse_drag_binding_id = self.bind("<B1-Motion>", self._on_mouse_drag)
 
-        self.countdown_label = None
-        self.no_duration_label = None
+        # self.countdown_label = None # Still commented out
+        # self.no_duration_label = None # Still commented out
 
-        self.complete_var = tk.BooleanVar()
+        self.complete_var = tk.BooleanVar() # Ensure this is active
         self.complete_var.set(False)
 
         self._setup_ui()
 
-        logger.info(f"ReminderPopupUI created for task ID: {self.task.id if self.task else 'N/A'}")
-        try:
-            if self.task and self.task.title:
-                speech_text = f"Reminder for task: {self.task.title}"
-                logger.info(f"Popup: Requesting TTS for: '{speech_text}'")
-                tts_manager.speak(speech_text)
-            elif self.task:
-                logger.warning(f"Popup: Task ID {self.task.id if self.task else 'N/A'} has no title. Speaking generic reminder.")
-                tts_manager.speak("Reminder for task with no title.")
-            else:
-                logger.error("Popup: Task details are unavailable for TTS. Speaking generic error.")
-                tts_manager.speak("Reminder triggered, but task details are unavailable.", error_context=True)
-        except Exception as e:
-            logger.error(f"CRITICAL: Unexpected error initiating TTS from ReminderPopupUI: {e}", exc_info=True)
-
-        self._schedule_nag_tts()
+        # TTS and other logs still commented out for this test
+        # logger.info(f"ReminderPopupUI created for task ID: {self.task.id if self.task else 'N/A'}")
+        # try: # TTS calls
+        # except Exception as e:
+        # self._schedule_nag_tts()
 
     def _handle_complete_toggle(self):
         if self.complete_var.get():
@@ -75,36 +63,28 @@ class ReminderPopupUI(bs.Toplevel):
             self.complete_task()
 
     def _truncate_text_to_fit(self, text, max_width_px, font_details):
-        # Ensure text is a string and handle if it's None, empty, or all whitespace
-        current_text = str(text or "").strip()
-        if not current_text:
+        if not text:
             return ""
-
         try:
             font_obj = tkinter.font.Font(font=font_details)
-            ellipsis = "..."
-            ellipsis_width = font_obj.measure(ellipsis)
-
-            # Ensure max_width_px is somewhat reasonable
-            if max_width_px < ellipsis_width:
-                if font_obj.measure(current_text) <= max_width_px:
-                    return current_text
-                return ""
-
+            current_text = str(text or "").strip()
             text_width = font_obj.measure(current_text)
             if text_width <= max_width_px:
                 return current_text
-
+            ellipsis = "..."
+            ellipsis_width = font_obj.measure(ellipsis)
+            if ellipsis_width > max_width_px:
+                if font_obj.measure(current_text) <= max_width_px:
+                    return current_text
+                return ""
             truncated_text = current_text
             while len(truncated_text) > 0:
                 if font_obj.measure(truncated_text + ellipsis) <= max_width_px:
                     return truncated_text + ellipsis
                 truncated_text = truncated_text[:-1]
-
             return ellipsis
-
         except Exception as e:
-            logger.error(f"Error in _truncate_text_to_fit for text='{text}', max_width_px={max_width_px}, font='{font_details}': {e}", exc_info=True)
+            logger.error(f"Error in _truncate_text_to_fit for '{text}': {e}", exc_info=True)
             return str(text or "").strip()
 
     def _calculate_tinted_color(self, hex_color, factor=0.5):
@@ -126,15 +106,18 @@ class ReminderPopupUI(bs.Toplevel):
             return None
 
     def _setup_ui(self):
-        self.countdown_label = None
-        self.no_duration_label = None
-
+        # Create main frame (essential)
         self.main_frame = bs.Frame(self, padding=(5,3,5,3))
         self.main_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+
+        # Comment out the test_label from the previous step
+        # test_label = bs.Label(self.main_frame, text="TEST VISIBILITY - If you see this, base popup works.")
+        # test_label.pack(padx=10, pady=10, expand=True, fill=tk.BOTH)
 
         self.top_content_frame = bs.Frame(self.main_frame)
         self.top_content_frame.pack(side=tk.TOP, fill=tk.X, pady=(0,2), anchor='n')
 
+        # Re-add complete_checkbutton
         self.complete_checkbutton = bs.Checkbutton(self.top_content_frame,
                                                variable=self.complete_var,
                                                command=self._handle_complete_toggle,
@@ -143,90 +126,36 @@ class ReminderPopupUI(bs.Toplevel):
         self.complete_checkbutton.pack(side=tk.LEFT, padx=(0, 5))
         ToolTip(self.complete_checkbutton, text="Mark as Complete")
 
+        # Re-add title_label (simplified)
         title_font_details = ("Helvetica", 14, "bold")
-        available_width_for_title = self.width - 135
-
-        task_title_text = str(self.task.title if self.task and self.task.title else "No Title")
-        display_title = self._truncate_text_to_fit(task_title_text, available_width_for_title, title_font_details)
-
         self.title_label = bs.Label(self.top_content_frame,
-                               text=display_title,
+                               text="Short Test Title", # Hardcoded short text
                                font=title_font_details,
-                               # wraplength removed
+                               # No wraplength for this test
                                anchor="w",
                                justify=tk.LEFT)
         self.title_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
 
+        # duration_display_frame and its contents remain commented out for now
+        # self.duration_display_frame = bs.Frame(self.top_content_frame)
+        # self.duration_display_frame.pack(side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0))
+        # ... (countdown_label / no_duration_label) ...
 
-        self.duration_display_frame = bs.Frame(self.top_content_frame)
-        self.duration_display_frame.pack(side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0))
-
-        if self.task and self.task.duration and self.task.duration > 0:
-            hours = self.remaining_work_seconds // 3600
-            minutes = (self.remaining_work_seconds % 3600) // 60
-            seconds = self.remaining_work_seconds % 60
-            if hours > 0:
-                initial_duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-            else:
-                initial_duration_str = f"{minutes:02d}:{seconds:02d}"
-            self.countdown_label = bs.Label(self.duration_display_frame, text=initial_duration_str,
-                                            font=("Helvetica", 12, "bold"), style="info.TLabel")
-            self.countdown_label.pack(side=tk.LEFT)
-        else:
-            self.no_duration_label = bs.Label(self.duration_display_frame, text="No specific work duration.", style="secondary.TLabel")
-            self.no_duration_label.pack(side=tk.LEFT)
-
-        self.desc_frame = bs.Frame(self.main_frame)
-
-        self.description_text_widget = tk.Text(self.desc_frame, wrap=tk.WORD, height=5, relief=tk.FLAT,
-                                                borderwidth=0, highlightthickness=0, font=("Helvetica", 10))
-        desc_text_content = self.task.description if self.task and self.task.description else "No description."
-        self.description_text_widget.insert(tk.END, desc_text_content)
-        try:
-            bg_color = self.cget('background')
-            self.description_text_widget.config(state=tk.DISABLED, bg=bg_color)
-        except tk.TclError:
-            self.description_text_widget.config(state=tk.DISABLED, bg="SystemButtonFace")
-        self.description_text_widget.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # desc_frame remains commented out for this test
+        # self.desc_frame = bs.Frame(self.main_frame)
+        # ... (description_text_widget) ...
 
         self.button_frame_ref = bs.Frame(self.main_frame)
         self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2), ipady=2)
+        # Add a temporary label to see if button_frame_ref is visible
+        temp_bottom_label = bs.Label(self.button_frame_ref, text="Bottom Frame Visible")
+        temp_bottom_label.pack(padx=5, pady=5)
 
-        self.expand_button = bs.Button(self.button_frame_ref,
-                                   text="▼",
-                                   command=self.toggle_expand_popup,
-                                   bootstyle="info-outline-round")
-        self.expand_button.pack(side=tk.LEFT, padx=2)
-        ToolTip(self.expand_button, text="More Info")
+        logger.info("Simplified _setup_ui: Added complete_checkbutton and simple title_label to top_content_frame.")
 
-        self.wrap_button = bs.Button(self.button_frame_ref, text="↘️",
-                                       command=self.toggle_wrap_view,
-                                       bootstyle="info-outline-round")
-        self.wrap_button.pack(side=tk.LEFT, padx=2)
-        ToolTip(self.wrap_button, text="Minimize to Corner")
-
-        self.start_button = bs.Button(self.button_frame_ref, text="▶ Start",
-                                       command=self.start_countdown_action,
-                                       bootstyle="success-outline")
-        self.start_button.pack(side=tk.LEFT, padx=2)
-        ToolTip(self.start_button, text="Start Work Session Timer")
-
-        self.skip_button = bs.Button(self.button_frame_ref,
-                                   text="⏩",
-                                   command=self.skip_reminder,
-                                   bootstyle="secondary")
-        self.skip_button.pack(side=tk.RIGHT, padx=(2,0))
-        ToolTip(self.skip_button, text="Skip Reminder")
-
-        self.reschedule_button = bs.Button(self.button_frame_ref,
-                                       text="🔄",
-                                       command=self.reschedule_task,
-                                       bootstyle="warning")
-        self.reschedule_button.pack(side=tk.RIGHT, padx=2)
-        ToolTip(self.reschedule_button, text="Reschedule (+15m)")
 
     def _update_countdown(self):
-        if self.remaining_work_seconds > 0:
+        if hasattr(self, 'remaining_work_seconds') and self.remaining_work_seconds > 0: # Added check
             hours = self.remaining_work_seconds // 3600
             minutes = (self.remaining_work_seconds % 3600) // 60
             seconds = self.remaining_work_seconds % 60
@@ -259,7 +188,7 @@ class ReminderPopupUI(bs.Toplevel):
     def complete_task(self):
         self._cancel_nag_tts()
         task_id_info = self.task.id if self.task else "N/A"
-        logger.debug(f"POPUP_ACTION: Attempting 'complete' callback for task ID: {task_id_info}.")
+        logger.debug(f"POPUP_ACTION: Task ID {task_id_info} marked complete.")
         if self.app_callbacks and 'complete' in self.app_callbacks:
             try:
                 self.app_callbacks['complete'](self.task.id if self.task else None)
@@ -296,21 +225,22 @@ class ReminderPopupUI(bs.Toplevel):
     def toggle_expand_popup(self):
         self.is_expanded = not self.is_expanded
         if self.is_expanded:
-            if hasattr(self, 'desc_frame') and hasattr(self, 'button_frame_ref'):
-                 self.button_frame_ref.pack_forget()
-                 self.desc_frame.pack(fill=tk.BOTH, expand=True, pady=(3,3))
-                 self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(5,0), ipady=5)
+            # This part will not work as desc_frame and button_frame_ref are not created in simplified _setup_ui
+            # if hasattr(self, 'desc_frame') and hasattr(self, 'button_frame_ref'):
+            #      self.button_frame_ref.pack_forget()
+            #      self.desc_frame.pack(fill=tk.BOTH, expand=True, pady=(3,3))
+            #      self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(5,0), ipady=5)
             self.geometry(f"{self.width}x{self.expanded_height}")
-            if hasattr(self, 'expand_button'):
-                self.expand_button.config(text="▲")
-                ToolTip(self.expand_button, text="Less Info")
+            # if hasattr(self, 'expand_button'):
+            #     self.expand_button.config(text="▲")
+            #     ToolTip(self.expand_button, text="Less Info")
         else:
-            if hasattr(self, 'desc_frame'):
-                self.desc_frame.pack_forget()
+            # if hasattr(self, 'desc_frame'):
+            #     self.desc_frame.pack_forget()
             self.geometry(f"{self.width}x{self.initial_height}")
-            if hasattr(self, 'expand_button'):
-                self.expand_button.config(text="▼")
-                ToolTip(self.expand_button, text="More Info")
+            # if hasattr(self, 'expand_button'):
+            #     self.expand_button.config(text="▼")
+            #     ToolTip(self.expand_button, text="More Info")
 
     def _on_mouse_press(self, event):
         self._drag_offset_x = event.x
@@ -343,45 +273,12 @@ class ReminderPopupUI(bs.Toplevel):
             logger.debug("Wrapping popup...")
             self.expanded_state_before_wrap = self.is_expanded
             print(f"DEBUG: WRAPPING: Stored self.expanded_state_before_wrap = {self.expanded_state_before_wrap}")
-            if self.is_expanded:
-                print(f"DEBUG: WRAPPING: Currently expanded, calling self.toggle_expand_popup() to collapse.")
-                self.toggle_expand_popup()
-                print(f"DEBUG: WRAPPING: After toggle_expand_popup, self.is_expanded = {self.is_expanded}")
-            print(f"DEBUG: WRAPPING: Called _cancel_nag_tts().")
-            print(f"DEBUG: WRAPPING: Attempting to pack_forget button_frame_ref, desc_frame.")
-            if hasattr(self, 'button_frame_ref') and self.button_frame_ref.winfo_ismapped():
-                 self.button_frame_ref.pack_forget()
-            print(f"DEBUG: WRAPPING: button_frame_ref forgotten. Is mapped: {self.button_frame_ref.winfo_ismapped() if hasattr(self.button_frame_ref, 'winfo_exists') and self.button_frame_ref.winfo_exists() else 'N/A'}")
-            if hasattr(self, 'desc_frame') and self.desc_frame.winfo_ismapped():
-                 self.desc_frame.pack_forget()
-            print(f"DEBUG: WRAPPING: desc_frame forgotten. Is mapped: {self.desc_frame.winfo_ismapped() if hasattr(self.desc_frame, 'winfo_exists') and self.desc_frame.winfo_exists() else 'N/A'}")
-            if hasattr(self, 'top_content_frame'):
-                print(f"DEBUG: WRAPPING: Modifying layout within top_content_frame.")
-
-                if hasattr(self, 'complete_checkbutton') and self.complete_checkbutton.winfo_ismapped():
-                    self.complete_checkbutton.pack_forget()
-                if hasattr(self, 'title_label') :
-                    self.title_label.pack_forget()
-
-
-                print(f"DEBUG: WRAPPING: title_label and complete_checkbutton (if existing) forgotten.")
-                if hasattr(self, 'duration_display_frame'):
-                    self.duration_display_frame.pack_forget()
-                    self.duration_display_frame.pack(in_=self.top_content_frame, anchor='center', expand=True, fill='both', padx=0, pady=0)
-                    print(f"DEBUG: WRAPPING: duration_display_frame repacked in top_content_frame (centered). Parent: {self.duration_display_frame.winfo_parent() if hasattr(self.duration_display_frame, 'winfo_exists') and self.duration_display_frame.winfo_exists() else 'N/A'}")
-                else:
-                    print(f"DEBUG: WRAPPING: duration_display_frame not found.")
-                self.top_content_frame.pack_forget()
-                self.top_content_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=0, pady=0)
-                print(f"DEBUG: WRAPPING: top_content_frame repacked to fill main_frame.")
-            else:
-                print(f"DEBUG: WRAPPING: top_content_frame not found.")
+            # ... (rest of wrap logic largely commented out due to simplified UI) ...
             new_x = self._calculate_corner_x()
             new_y = self._calculate_corner_y()
             new_geometry = f"{self.wrapped_width}x{self.wrapped_height}+{new_x}+{new_y}"
             print(f"DEBUG: WRAPPING: Setting geometry to: {new_geometry}")
             self.geometry(new_geometry)
-            print(f"DEBUG: WRAPPING: Unbinding drag events, binding unwrap click.")
             if hasattr(self, '_on_mouse_press_binding_id') and self._on_mouse_press_binding_id:
                 self.unbind("<ButtonPress-1>", self._on_mouse_press_binding_id)
             if hasattr(self, '_on_mouse_release_binding_id') and self._on_mouse_release_binding_id:
@@ -389,97 +286,36 @@ class ReminderPopupUI(bs.Toplevel):
             if hasattr(self, '_on_mouse_drag_binding_id') and self._on_mouse_drag_binding_id:
                 self.unbind("<B1-Motion>", self._on_mouse_drag_binding_id)
             self._unwrap_binding_id = self.bind("<ButtonPress-1>", self.toggle_wrap_view)
-            if hasattr(self, 'duration_display_frame') and self.duration_display_frame.winfo_exists():
-                 self.duration_display_frame.bind("<ButtonPress-1>", self.toggle_wrap_view)
-            if hasattr(self, 'countdown_label') and self.countdown_label and self.countdown_label.winfo_exists():
-                 self.countdown_label.bind("<ButtonPress-1>", self.toggle_wrap_view)
-            if hasattr(self, 'no_duration_label') and self.no_duration_label and self.no_duration_label.winfo_exists():
-                 self.no_duration_label.bind("<ButtonPress-1>", self.toggle_wrap_view)
-            print(f"DEBUG: WRAPPING: Unwrap click bound with ID: {self._unwrap_binding_id}")
-            if hasattr(self, 'wrap_button'):
-                self.wrap_button.config(text="↗️")
-                ToolTip(self.wrap_button, text="Restore Full View")
-            print(f"DEBUG: WRAPPING: Wrap button updated.")
         else:
             print(f"DEBUG: UNWRAPPING branch: self.is_wrapped is now False.")
             logger.debug("Unwrapping popup...")
-            print(f"DEBUG: UNWRAPPING: Unbinding unwrap click events. Current _unwrap_binding_id: {self._unwrap_binding_id}")
             if self._unwrap_binding_id:
                 self.unbind("<ButtonPress-1>", self._unwrap_binding_id)
-                if hasattr(self, 'duration_display_frame') and self.duration_display_frame.winfo_exists():
-                     self.duration_display_frame.unbind("<ButtonPress-1>")
-                if hasattr(self, 'countdown_label') and self.countdown_label and self.countdown_label.winfo_exists():
-                     self.countdown_label.unbind("<ButtonPress-1>")
-                if hasattr(self, 'no_duration_label') and self.no_duration_label and self.no_duration_label.winfo_exists():
-                     self.no_duration_label.unbind("<ButtonPress-1>")
                 self._unwrap_binding_id = None
-            print(f"DEBUG: UNWRAPPING: Unwrap click events unbound. _unwrap_binding_id is now {self._unwrap_binding_id}")
-            print(f"DEBUG: UNWRAPPING: Re-binding drag events.")
             self._on_mouse_press_binding_id = self.bind("<ButtonPress-1>", self._on_mouse_press)
             self._on_mouse_release_binding_id = self.bind("<ButtonRelease-1>", self._on_mouse_release)
             self._on_mouse_drag_binding_id = self.bind("<B1-Motion>", self._on_mouse_drag)
-            if hasattr(self, 'top_content_frame'):
-                print(f"DEBUG: UNWRAPPING: Restoring layout within top_content_frame.")
-                if hasattr(self, 'duration_display_frame') and self.duration_display_frame.winfo_ismapped():
-                    self.duration_display_frame.pack_forget()
-                print(f"DEBUG: UNWRAPPING: duration_display_frame forgotten from top_content_frame.")
 
-                if hasattr(self, 'complete_checkbutton'):
-                    self.complete_checkbutton.pack(side=tk.LEFT, padx=(0,5))
+            self.geometry(f"{self.width}x{self.initial_height}") # Restore initial geometry
+            self._setup_ui() # Attempt to restore fuller UI, though some elements are still commented out
 
-                if hasattr(self, 'title_label'):
-                     self.title_label.pack(in_=self.top_content_frame, side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
-                print(f"DEBUG: UNWRAPPING: title_label repacked. Is mapped: {self.title_label.winfo_ismapped() if hasattr(self, 'title_label') and self.title_label.winfo_exists() else 'N/A'}")
-
-                if hasattr(self, 'duration_display_frame'):
-                    self.duration_display_frame.pack(in_=self.top_content_frame, side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0))
-                print(f"DEBUG: UNWRAPPING: duration_display_frame repacked into top_content_frame (original). Parent: {self.duration_display_frame.winfo_parent() if hasattr(self.duration_display_frame, 'winfo_exists') and self.duration_display_frame.winfo_exists() else 'N/A'}")
-                self.top_content_frame.pack_forget()
-                self.top_content_frame.pack(side=tk.TOP, fill=tk.X, pady=(0,2), anchor='n')
-                print(f"DEBUG: UNWRAPPING: top_content_frame's own packing restored in main_frame.")
-            else:
-                print(f"DEBUG: UNWRAPPING: top_content_frame not found.")
-            if hasattr(self, 'button_frame_ref'):
-                 self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2), ipady=2)
-            print(f"DEBUG: UNWRAPPING: button_frame_ref repacked. Is mapped: {self.button_frame_ref.winfo_ismapped() if hasattr(self.button_frame_ref, 'winfo_exists') and self.button_frame_ref.winfo_exists() else 'N/A'}")
-            restored_geometry = f"{self.width}x{self.initial_height}"
-            print(f"DEBUG: UNWRAPPING: Setting geometry to: {restored_geometry}")
-            self.geometry(restored_geometry)
-            print(f"DEBUG: UNWRAPPING: self.expanded_state_before_wrap = {self.expanded_state_before_wrap}")
-            if self.expanded_state_before_wrap:
-                print(f"DEBUG: UNWRAPPING: Calling self.toggle_expand_popup() to re-expand description.")
-                self.toggle_expand_popup()
-                print(f"DEBUG: UNWRAPPING: After toggle_expand_popup, self.is_expanded = {self.is_expanded}")
-            if hasattr(self, 'wrap_button'):
-                self.wrap_button.config(text="↘️")
-                ToolTip(self.wrap_button, text="Minimize to Corner")
-            print(f"DEBUG: UNWRAPPING: Wrap button updated.")
         logger.debug(f"toggle_wrap_view finished. is_wrapped: {self.is_wrapped}")
         print(f"DEBUG: toggle_wrap_view EXIT: self.is_wrapped={self.is_wrapped}, current geometry={self.geometry()}")
 
     def start_countdown_action(self):
         logger.debug(f"POPUP_ACTION: 'start_countdown_action' called for task ID: {self.task.id if self.task else 'N/A'}.")
         self._cancel_nag_tts()
-        if self.remaining_work_seconds > 0:
+        if hasattr(self, 'remaining_work_seconds') and self.remaining_work_seconds > 0 :
             self._update_countdown()
-        if hasattr(self, 'start_button'):
-            self.start_button.config(state=tk.DISABLED)
-            ToolTip(self.start_button, text="Timer Started")
+        # if hasattr(self, 'start_button'): # Start button not in this simplified UI
+        #     self.start_button.config(state=tk.DISABLED)
+        #     ToolTip(self.start_button, text="Timer Started")
 
     def _schedule_nag_tts(self):
         if not self.winfo_exists():
             return
-        nag_interval_ms = 20000
-        task_title = self.task.title if self.task and self.task.title else "untitled task"
-        tts_message = f"Sir, time for task {task_title}, please start work."
-        logger.debug(f"POPUP_NAG: Scheduling TTS nag in {nag_interval_ms}ms: '{tts_message}'")
-        if self.nag_tts_after_id:
-            self.after_cancel(self.nag_tts_after_id)
-            self.nag_tts_after_id = None
-        self.nag_tts_after_id = self.after(nag_interval_ms, lambda: [
-            tts_manager.speak(tts_message),
-            self._schedule_nag_tts()
-        ])
+        # Nag TTS commented out for this test
+        pass
 
     def _cancel_nag_tts(self):
         if self.nag_tts_after_id:
@@ -507,7 +343,7 @@ if __name__ == '__main__':
             self.description = description
             self.duration = duration
 
-    sample_task = DummyTask(1, "Test Popup with Title/Timer", "This is a test description that won't be seen.", 65) # 1 min 5 sec duration
+    sample_task = DummyTask(1, "Test Popup with Title/Timer", "This is a test description that won't be seen.", 65)
 
     def show_popup(task_obj):
         logger.info(f"Attempting to show popup for task: {task_obj.title if task_obj else 'N/A'}")
