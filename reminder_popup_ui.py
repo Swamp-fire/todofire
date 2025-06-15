@@ -153,30 +153,26 @@ class ReminderPopupUI(bs.Toplevel):
         self.button_frame_ref = bs.Frame(self.main_frame)
 
         try:
-            # Get the background color of the Toplevel window itself
-            # Style needs to be configured on the root/parent for Toplevel
             style = ttk.Style(self)
+            # Lookup the actual background of the Toplevel window
             popup_bg = style.lookup('Toplevel', 'background')
 
-            # Define a new custom style for button_frame_ref that uses this background
-            # Using a unique name for the style to avoid conflicts.
-            custom_frame_style_name = f"ButtonFrameBackground.TFrame"
+            custom_frame_style_name = "TransparentFrame.TFrame"
             style.configure(custom_frame_style_name, background=popup_bg)
 
-            # Apply the custom style to button_frame_ref
             self.button_frame_ref.configure(style=custom_frame_style_name)
-            logger.debug(f"Attempted to set button_frame_ref background to: {popup_bg}")
+            logger.debug(f"Applied style '{custom_frame_style_name}' with background '{popup_bg}' to button_frame_ref.")
 
         except tk.TclError as e:
-            logger.warning(f"Could not apply custom background style to button_frame_ref: {e}")
-            # Fallback: try to apply a theme-consistent style if direct styling fails
-            # This might not achieve perfect transparency but could improve consistency.
+            logger.warning(f"Could not apply custom background style '{custom_frame_style_name}' to button_frame_ref: {e}")
+            # Fallback code can remain as is.
             try:
                 current_theme = self.tk.call("ttk::style", "theme", "use")
-                if "dark" in current_theme.lower() or "solar" in current_theme.lower(): # Example dark themes
-                    self.button_frame_ref.configure(bootstyle="dark") # Or another appropriate dark style component
-                else: # Example light themes
-                    self.button_frame_ref.configure(bootstyle="light") # Or another appropriate light style component
+                if "dark" in current_theme.lower() or "solar" in current_theme.lower():
+                    self.button_frame_ref.configure(bootstyle="dark")
+                else:
+                    self.button_frame_ref.configure(bootstyle="light")
+                logger.debug("Applied fallback dark/light bootstyle to button_frame_ref.")
             except tk.TclError as e_fallback:
                 logger.warning(f"Could not apply fallback theme bootstyle to button_frame_ref: {e_fallback}")
 
