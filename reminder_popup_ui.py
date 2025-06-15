@@ -151,18 +151,40 @@ class ReminderPopupUI(bs.Toplevel):
 
         # Restore top_content_frame
         self.top_content_frame = bs.Frame(self.main_frame)
-        self.top_content_frame.pack(side=tk.TOP, fill=tk.X, pady=(0,2), anchor='n') # Adjusted pady
+        self.top_content_frame.pack(side=tk.TOP, fill=tk.X, pady=(0,2), anchor='n')
 
-        # Restore title_label
+        # New Round Checkbox for Completing Task (RELOCATED)
+        initial_checkbox_image = self.img_checkbox_unchecked # Assuming self.img_checkbox_unchecked is loaded in __init__
+        fallback_text = "[ ]"
+
+        if not initial_checkbox_image:
+            self.complete_checkbox_label = tk.Label(self.top_content_frame, text=fallback_text, font=("Helvetica", 12))
+            # Optionally, use bs.Label with a link style for theme consistency:
+            # self.complete_checkbox_label = bs.Label(self.top_content_frame, text=fallback_text, bootstyle="secondary-link")
+            logger.info("Fallback text checkbox created in top_content_frame as image failed.")
+        else:
+            self.complete_checkbox_label = tk.Label(self.top_content_frame, image=initial_checkbox_image)
+            try:
+                # Attempt to make tk.Label background match its new parent (top_content_frame)
+                parent_bg = self.top_content_frame.cget("background")
+                self.complete_checkbox_label.config(bg=parent_bg)
+            except tk.TclError:
+                logger.warning("Could not match checkbox label bg to top_content_frame bg.")
+
+        self.complete_checkbox_label.pack(side=tk.LEFT, padx=(0, 5)) # Pack checkbox to the left first
+        self.complete_checkbox_label.bind("<Button-1>", self._on_checkbox_click)
+        ToolTip(self.complete_checkbox_label, text="Mark as Complete")
+
+        # Title_label (packed after checkbox)
         self.title_label = bs.Label(self.top_content_frame, text=(self.task.title if self.task and self.task.title else "No Title"),
                                font=("Helvetica", 14, "bold"),
-                               wraplength=(self.width - 100),
-                               anchor="w", justify=tk.LEFT, padding=(0,0,0,2)) # Adjusted padding
-        self.title_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
+                               wraplength=(self.width - 140), # Adjust wraplength if needed due to checkbox
+                               anchor="w", justify=tk.LEFT, padding=(0,0,0,2))
+        self.title_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5)) # Original packing for title
 
-        # Restore duration_display_frame (contains countdown or no_duration message)
+        # Duration_display_frame (remains on the right)
         self.duration_display_frame = bs.Frame(self.top_content_frame)
-        self.duration_display_frame.pack(side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0)) # This should be correct
+        self.duration_display_frame.pack(side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0))
 
         if self.task and self.task.duration and self.task.duration > 0:
             hours = self.remaining_work_seconds // 3600
@@ -267,34 +289,6 @@ class ReminderPopupUI(bs.Toplevel):
                                        bootstyle="secondary-link")
             self.skip_button.pack(side=tk.RIGHT, padx=(2,0))
             ToolTip(self.skip_button, text="Skip Reminder (img err)")
-
-        # New Round Checkbox for Completing Task
-        # This will replace the old self.complete_button
-        # It should be packed similar to how self.complete_button was (e.g. side=tk.RIGHT)
-
-        initial_checkbox_image = self.img_checkbox_unchecked
-        fallback_text = "[ ]" # Fallback text if image fails to load
-
-        if not initial_checkbox_image: # If image loading failed
-            # Create a text-based label as fallback for the checkbox
-            self.complete_checkbox_label = tk.Label(self.button_frame_ref, text=fallback_text, font=("Helvetica", 12))
-            # Could try bs.Label and a 'link' bootstyle for consistency with other fallbacks if preferred
-            # self.complete_checkbox_label = bs.Label(self.button_frame_ref, text=fallback_text, bootstyle="secondary-link")
-            logger.info("Fallback text checkbox created as checkbox_round_unchecked.png failed to load.")
-        else:
-            # Create label with the unchecked image
-            self.complete_checkbox_label = tk.Label(self.button_frame_ref, image=initial_checkbox_image)
-            # To make tk.Label background transparent on themed frame, match its bg to parent
-            try:
-                parent_bg = self.button_frame_ref.cget("background") # Get parent's actual background
-                self.complete_checkbox_label.config(bg=parent_bg)
-            except tk.TclError: # In case parent bg is not a solid color or error
-                logger.warning("Could not match checkbox label bg to parent frame bg.")
-                # For bs.Label, this might not be necessary if bootstyle handles it.
-
-        self.complete_checkbox_label.pack(side=tk.RIGHT, padx=2) # Adjust pack options as needed
-        self.complete_checkbox_label.bind("<Button-1>", self._on_checkbox_click)
-        ToolTip(self.complete_checkbox_label, text="Mark as Complete")
 
         # Reschedule Button
         if self.img_reschedule:
