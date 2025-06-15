@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
-import tkinter.font # Added
+import tkinter.font
 import ttkbootstrap as bs
 from ttkbootstrap.tooltip import ToolTip
 from tts_manager import tts_manager
@@ -75,35 +75,37 @@ class ReminderPopupUI(bs.Toplevel):
             self.complete_task()
 
     def _truncate_text_to_fit(self, text, max_width_px, font_details):
-        if not text:
+        # Ensure text is a string and handle if it's None, empty, or all whitespace
+        current_text = str(text or "").strip()
+        if not current_text:
             return ""
 
         try:
             font_obj = tkinter.font.Font(font=font_details)
-            current_text = str(text) # Ensure it's a string
-            text_width = font_obj.measure(current_text)
-
-            if text_width <= max_width_px:
-                return current_text
-
             ellipsis = "..."
             ellipsis_width = font_obj.measure(ellipsis)
 
-            if ellipsis_width > max_width_px: # Cannot even fit ellipsis
+            # Ensure max_width_px is somewhat reasonable
+            if max_width_px < ellipsis_width:
+                if font_obj.measure(current_text) <= max_width_px:
+                    return current_text
                 return ""
 
-            # Iteratively shorten the text from the end
-            while len(current_text) > 0:
-                if font_obj.measure(current_text + ellipsis) <= max_width_px:
-                    return current_text + ellipsis
-                current_text = current_text[:-1]
+            text_width = font_obj.measure(current_text)
+            if text_width <= max_width_px:
+                return current_text
 
-            # If loop finishes, it means only ellipsis can fit (or nothing)
+            truncated_text = current_text
+            while len(truncated_text) > 0:
+                if font_obj.measure(truncated_text + ellipsis) <= max_width_px:
+                    return truncated_text + ellipsis
+                truncated_text = truncated_text[:-1]
+
             return ellipsis
 
         except Exception as e:
-            logger.error(f"Error in _truncate_text_to_fit for '{text}': {e}")
-            return str(text) # Fallback to original text if error
+            logger.error(f"Error in _truncate_text_to_fit for text='{text}', max_width_px={max_width_px}, font='{font_details}': {e}", exc_info=True)
+            return str(text or "").strip()
 
     def _calculate_tinted_color(self, hex_color, factor=0.5):
         try:
@@ -150,6 +152,7 @@ class ReminderPopupUI(bs.Toplevel):
         self.title_label = bs.Label(self.top_content_frame,
                                text=display_title,
                                font=title_font_details,
+                               # wraplength removed
                                anchor="w",
                                justify=tk.LEFT)
         self.title_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
@@ -357,11 +360,11 @@ class ReminderPopupUI(bs.Toplevel):
 
                 if hasattr(self, 'complete_checkbutton') and self.complete_checkbutton.winfo_ismapped():
                     self.complete_checkbutton.pack_forget()
-                if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master.winfo_ismapped():
-                    self.title_label.master.pack_forget()
+                if hasattr(self, 'title_label') :
+                    self.title_label.pack_forget()
 
 
-                print(f"DEBUG: WRAPPING: title_label's clipper and complete_checkbutton (if existing) forgotten.")
+                print(f"DEBUG: WRAPPING: title_label and complete_checkbutton (if existing) forgotten.")
                 if hasattr(self, 'duration_display_frame'):
                     self.duration_display_frame.pack_forget()
                     self.duration_display_frame.pack(in_=self.top_content_frame, anchor='center', expand=True, fill='both', padx=0, pady=0)
@@ -424,17 +427,8 @@ class ReminderPopupUI(bs.Toplevel):
                 if hasattr(self, 'complete_checkbutton'):
                     self.complete_checkbutton.pack(side=tk.LEFT, padx=(0,5))
 
-                # Re-pack title_label directly into top_content_frame
                 if hasattr(self, 'title_label'):
-                    if self.title_label.master != self.top_content_frame: # If it was in a clipper
-                        self.title_label.destroy()
-                        self.title_label = bs.Label(self.top_content_frame,
-                                   text=(self.task.title if self.task and self.task.title else "No Title"),
-                                   font=("Helvetica", 14, "bold"),
-                                   wraplength=self.width - 140,
-                                   anchor="w",
-                                   justify=tk.LEFT)
-                    self.title_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
+                     self.title_label.pack(in_=self.top_content_frame, side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
                 print(f"DEBUG: UNWRAPPING: title_label repacked. Is mapped: {self.title_label.winfo_ismapped() if hasattr(self, 'title_label') and self.title_label.winfo_exists() else 'N/A'}")
 
                 if hasattr(self, 'duration_display_frame'):
