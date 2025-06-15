@@ -18,8 +18,10 @@ class ReminderPopupUI(bs.Toplevel):
             self.img_wrap = tk.PhotoImage(file="assets/minimize_round.png")
             self.img_start = tk.PhotoImage(file="assets/start_round.png")
             self.img_skip = tk.PhotoImage(file="assets/skip_round.png")
-            self.img_complete = tk.PhotoImage(file="assets/complete_round.png")
+            # self.img_complete = tk.PhotoImage(file="assets/complete_round.png") # Removed
             self.img_reschedule = tk.PhotoImage(file="assets/reschedule_round.png")
+            self.img_checkbox_unchecked = tk.PhotoImage(file="assets/checkbox_round_unchecked.png")
+            self.img_checkbox_checked = tk.PhotoImage(file="assets/checkbox_round_checked.png")
             # Add hover/pressed images if planned, e.g., self.img_start_hover
         except tk.TclError as e:
             logger.error(f"Error loading placeholder button images: {e}. Ensure 'assets' folder and dummy PNGs exist.")
@@ -28,14 +30,18 @@ class ReminderPopupUI(bs.Toplevel):
             self.img_wrap = None
             self.img_start = None
             self.img_skip = None
-            self.img_complete = None
+            # self.img_complete = None # Removed
             self.img_reschedule = None
+            logger.error(f"Error loading checkbox images: {e}. Using None for checkbox images.")
+            self.img_checkbox_unchecked = None
+            self.img_checkbox_checked = None
 
         self.overrideredirect(True)
         self.task = task
         self.app_callbacks = app_callbacks
         self.after_id = None
         self.is_expanded = False # Kept for toggle_expand_popup text change
+        self.checkbox_is_checked = False
         self._drag_offset_x = 0
         self._drag_offset_y = 0
         self.is_wrapped = False
@@ -91,6 +97,26 @@ class ReminderPopupUI(bs.Toplevel):
             logger.error(f"CRITICAL: Unexpected error initiating TTS from ReminderPopupUI: {e}", exc_info=True)
 
         self._schedule_nag_tts() # Instruction 1.b
+
+    def _on_checkbox_click(self, event=None):
+        if not self.checkbox_is_checked: # Only proceed if not already checked
+            self.checkbox_is_checked = True # Mark as checked
+
+            # Update image to checked state, if images are loaded
+            if self.img_checkbox_checked and hasattr(self, 'complete_checkbox_label'):
+                self.complete_checkbox_label.config(image=self.img_checkbox_checked)
+            elif hasattr(self, 'complete_checkbox_label'): # Fallback text update
+                self.complete_checkbox_label.config(text="[X]")
+
+
+            # Call the original complete_task method
+            # complete_task() will handle logging, callbacks, and destroying the popup
+            self.complete_task()
+            # No need to worry about disabling, as complete_task destroys the window.
+        else:
+            # Optionally, could allow unchecking if complete_task didn't destroy window
+            # For now, once checked and popup closes, it's done.
+            logger.debug("Checkbox already considered checked and task completion initiated.")
 
     def _calculate_tinted_color(self, hex_color, factor=0.5):
         try:
@@ -175,35 +201,6 @@ class ReminderPopupUI(bs.Toplevel):
         # Button Frame Setup
         self.button_frame_ref = bs.Frame(self.main_frame)
 
-        try:
-            style = ttk.Style(self)
-            # Lookup the actual background of the Toplevel window
-            popup_bg = style.lookup('Toplevel', 'background')
-            tinted_bg = self._calculate_tinted_color(popup_bg, factor=0.5)
-
-            if not tinted_bg: # Fallback if tint calculation failed
-                tinted_bg = "#808080" # A neutral grey
-                logger.warning(f"Tinted color calculation failed, using fallback {tinted_bg} for button_frame_ref")
-
-            custom_frame_style_name = "TintedButtonFrame.TFrame" # New distinct name
-            style.configure(custom_frame_style_name, background=tinted_bg) # Use tinted_bg
-
-            self.button_frame_ref.configure(style=custom_frame_style_name)
-            logger.debug(f"Applied style '{custom_frame_style_name}' with tinted background '{tinted_bg}' to button_frame_ref.")
-
-        except tk.TclError as e:
-            logger.warning(f"Could not apply custom background style 'TintedButtonFrame.TFrame' to button_frame_ref: {e}")
-            # Fallback code can remain as is.
-            try:
-                current_theme = self.tk.call("ttk::style", "theme", "use")
-                if "dark" in current_theme.lower() or "solar" in current_theme.lower():
-                    self.button_frame_ref.configure(bootstyle="dark")
-                else:
-                    self.button_frame_ref.configure(bootstyle="light")
-                logger.debug("Applied fallback dark/light bootstyle to button_frame_ref.")
-            except tk.TclError as e_fallback:
-                logger.warning(f"Could not apply fallback theme bootstyle to button_frame_ref: {e_fallback}")
-
         # Packing remains:
         self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2), ipady=2)
 
@@ -271,21 +268,33 @@ class ReminderPopupUI(bs.Toplevel):
             self.skip_button.pack(side=tk.RIGHT, padx=(2,0))
             ToolTip(self.skip_button, text="Skip Reminder (img err)")
 
-        # Complete Button
-        if self.img_complete:
-            self.complete_button = bs.Button(self.button_frame_ref,
-                                         image=self.img_complete,
-                                         command=self.complete_task,
-                                         bootstyle="success-link")
-            self.complete_button.pack(side=tk.RIGHT, padx=2)
-            ToolTip(self.complete_button, text="Mark as Complete")
+        # New Round Checkbox for Completing Task
+        # This will replace the old self.complete_button
+        # It should be packed similar to how self.complete_button was (e.g. side=tk.RIGHT)
+
+        initial_checkbox_image = self.img_checkbox_unchecked
+        fallback_text = "[ ]" # Fallback text if image fails to load
+
+        if not initial_checkbox_image: # If image loading failed
+            # Create a text-based label as fallback for the checkbox
+            self.complete_checkbox_label = tk.Label(self.button_frame_ref, text=fallback_text, font=("Helvetica", 12))
+            # Could try bs.Label and a 'link' bootstyle for consistency with other fallbacks if preferred
+            # self.complete_checkbox_label = bs.Label(self.button_frame_ref, text=fallback_text, bootstyle="secondary-link")
+            logger.info("Fallback text checkbox created as checkbox_round_unchecked.png failed to load.")
         else:
-            self.complete_button = bs.Button(self.button_frame_ref,
-                                         text="✔️",
-                                         command=self.complete_task,
-                                         bootstyle="success-link")
-            self.complete_button.pack(side=tk.RIGHT, padx=2)
-            ToolTip(self.complete_button, text="Mark as Complete (img err)")
+            # Create label with the unchecked image
+            self.complete_checkbox_label = tk.Label(self.button_frame_ref, image=initial_checkbox_image)
+            # To make tk.Label background transparent on themed frame, match its bg to parent
+            try:
+                parent_bg = self.button_frame_ref.cget("background") # Get parent's actual background
+                self.complete_checkbox_label.config(bg=parent_bg)
+            except tk.TclError: # In case parent bg is not a solid color or error
+                logger.warning("Could not match checkbox label bg to parent frame bg.")
+                # For bs.Label, this might not be necessary if bootstyle handles it.
+
+        self.complete_checkbox_label.pack(side=tk.RIGHT, padx=2) # Adjust pack options as needed
+        self.complete_checkbox_label.bind("<Button-1>", self._on_checkbox_click)
+        ToolTip(self.complete_checkbox_label, text="Mark as Complete")
 
         # Reschedule Button
         if self.img_reschedule:
