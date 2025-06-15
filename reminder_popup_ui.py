@@ -40,7 +40,7 @@ class ReminderPopupUI(bs.Toplevel):
         self.after_id = None
         self.is_expanded = False # Kept for toggle_expand_popup text change
         # self.checkbox_is_checked = False # Removed
-        self.complete_var = tk.BooleanVar()
+        # self.complete_var = tk.BooleanVar() # Removed
         self._drag_offset_x = 0
         self._drag_offset_y = 0
         self.is_wrapped = False
@@ -97,14 +97,39 @@ class ReminderPopupUI(bs.Toplevel):
 
         self._schedule_nag_tts() # Instruction 1.b
 
-    def _on_complete_checkbutton_change(self):
-        if self.complete_var.get(): # If checked
-            # Prevent unchecking from re-triggering or if action is one-way
-            if hasattr(self, 'complete_checkbutton') and self.complete_checkbutton.winfo_exists():
-                self.complete_checkbutton.config(state=tk.DISABLED) # Disable after first check
+    def _on_complete_button_enter(self, event):
+        if hasattr(self, 'complete_button') and self.complete_button.winfo_exists():
+            # Attempt to change bootstyle and text.
+            # ttkbootstrap buttons might need specific handling for dynamic style changes.
+            # We may need to call self.complete_button.config(bootstyle=...)
+            # or directly use ttk.Style().configure if simple config isn't enough.
+            # For now, let's try the direct .config approach.
+            try:
+                self.complete_button.config(text="✔️", bootstyle="success-round")
+            except tk.TclError as e:
+                logger.error(f"Error applying hover style to complete_button: {e}")
+                # Fallback if direct bootstyle config fails, just change text
+                self.complete_button.config(text="✔️")
 
-            self.complete_task() # Call the original method
-        # No action needed if unchecked, as completion is usually a one-way street for this app
+
+    def _on_complete_button_leave(self, event):
+        if hasattr(self, 'complete_button') and self.complete_button.winfo_exists():
+            # Revert to original style and text
+            try:
+                self.complete_button.config(text="", bootstyle="success-outline-round")
+            except tk.TclError as e:
+                logger.error(f"Error reverting hover style for complete_button: {e}")
+                # Fallback
+                self.complete_button.config(text="")
+
+    # def _on_complete_checkbutton_change(self): # Removed
+    #     if self.complete_var.get(): # If checked
+    #         # Prevent unchecking from re-triggering or if action is one-way
+    #         if hasattr(self, 'complete_checkbutton') and self.complete_checkbutton.winfo_exists():
+    #             self.complete_checkbutton.config(state=tk.DISABLED) # Disable after first check
+    #
+    #         self.complete_task() # Call the original method
+    #     # No action needed if unchecked, as completion is usually a one-way street for this app
 
     # def _on_checkbox_click(self, event=None): # Removed
     #     if not self.checkbox_is_checked: # Only proceed if not already checked
@@ -161,19 +186,23 @@ class ReminderPopupUI(bs.Toplevel):
         self.top_content_frame = bs.Frame(self.main_frame)
         self.top_content_frame.pack(side=tk.TOP, fill=tk.X, pady=(0,2), anchor='n')
 
-        self.complete_checkbutton = bs.Checkbutton(self.top_content_frame,
-                                               variable=self.complete_var,
-                                               command=self._on_complete_checkbutton_change,
-                                               bootstyle="success") # New style
-        self.complete_checkbutton.pack(side=tk.LEFT, padx=(0, 5))
-        ToolTip(self.complete_checkbutton, text="Mark as Complete")
+        # New "Complete" button (replaces checkbutton)
+        # Placed in self.top_content_frame, to the left of title_label
+        self.complete_button = bs.Button(self.top_content_frame,
+                                         text="",  # Initially empty
+                                         command=self.complete_task, # Direct call, no separate handler needed if no state change before call
+                                         bootstyle="success-outline-round")
+        self.complete_button.pack(side=tk.LEFT, padx=(0, 5))
+        ToolTip(self.complete_button, text="Mark as Complete")
+        self.complete_button.bind("<Enter>", self._on_complete_button_enter)
+        self.complete_button.bind("<Leave>", self._on_complete_button_leave)
 
         # Title_label (packed after checkbox)
         self.title_label = bs.Label(self.top_content_frame, text=(self.task.title if self.task and self.task.title else "No Title"),
                                font=("Helvetica", 14, "bold"),
                                wraplength=(self.width - 140), # Adjusted for checkbutton
                                anchor="w", justify=tk.LEFT, padding=(0,0,0,2))
-        self.title_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0,5))
+        self.title_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
 
         # Duration_display_frame (remains on the right)
         self.duration_display_frame = bs.Frame(self.top_content_frame)
