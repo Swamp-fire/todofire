@@ -551,123 +551,59 @@ class ReminderPopupUI(bs.Toplevel):
 
     def toggle_wrap_view(self, event=None):
         logger.info(f"toggle_wrap_view called. Current is_wrapped: {self.is_wrapped}. Event: {event}")
+        # Prevent re-triggering if animation is already in progress (optional, good practice)
+        # if self.anim_current_step > 0 and self.anim_current_step <= self.anim_total_steps:
+        #     logger.debug("Animation already in progress, ignoring toggle request.")
+        #     return
+
         self.is_wrapped = not self.is_wrapped
-        if self.is_wrapped:
-            print(f"DEBUG: WRAPPING branch: self.is_wrapped is now True.")
+
+        if self.is_wrapped: # Start wrapping process
             logger.debug("Wrapping popup...")
-            self.expanded_state_before_wrap = self.is_expanded
-            print(f"DEBUG: WRAPPING: Stored self.expanded_state_before_wrap = {self.expanded_state_before_wrap}")
+            # Store current geometry (full string: "widthxheight+x+y")
+            self.last_normal_geometry_before_wrap = self.geometry()
+            self.expanded_state_before_wrap = self.is_expanded # Store expanded state
+
             if self.is_expanded:
-                print(f"DEBUG: WRAPPING: Currently expanded, calling self.toggle_expand_popup() to collapse.")
-                self.toggle_expand_popup()
-                print(f"DEBUG: WRAPPING: After toggle_expand_popup, self.is_expanded = {self.is_expanded}")
-            # self._cancel_nag_tts() # This was previously commented out to keep TTS nagging
-            print(f"DEBUG: WRAPPING: Called _cancel_nag_tts().")
-            print(f"DEBUG: WRAPPING: Attempting to pack_forget button_frame_ref, desc_frame.")
+                self.toggle_expand_popup() # Collapse description if open, before animation
+
+            # Hide normal content (elements that are part of the full view)
             if hasattr(self, 'button_frame_ref') and self.button_frame_ref.winfo_ismapped():
                  self.button_frame_ref.pack_forget()
-            print(f"DEBUG: WRAPPING: button_frame_ref forgotten. Is mapped: {self.button_frame_ref.winfo_ismapped() if hasattr(self.button_frame_ref, 'winfo_exists') and self.button_frame_ref.winfo_exists() else 'N/A'}")
-            if hasattr(self, 'desc_frame') and self.desc_frame.winfo_ismapped():
+            if hasattr(self, 'desc_frame') and self.desc_frame.winfo_ismapped(): # Though desc_frame is usually handled by toggle_expand
                  self.desc_frame.pack_forget()
-            print(f"DEBUG: WRAPPING: desc_frame forgotten. Is mapped: {self.desc_frame.winfo_ismapped() if hasattr(self.desc_frame, 'winfo_exists') and self.desc_frame.winfo_exists() else 'N/A'}")
+
+            # Modify layout within top_content_frame for wrapped view
             if hasattr(self, 'top_content_frame'):
-                print(f"DEBUG: WRAPPING: Modifying layout within top_content_frame.")
-                if hasattr(self, 'complete_button') and self.complete_button.winfo_ismapped(): # Check for new label name
+                if hasattr(self, 'complete_button') and self.complete_button.winfo_ismapped():
                     self.complete_button.pack_forget()
                 if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master.winfo_ismapped(): # title_label.master is the clipper
-                    self.title_label.master.pack_forget()
-                print(f"DEBUG: WRAPPING: title_label's clipper and complete_button forgotten.")
-                if hasattr(self, 'duration_display_frame'):
+                    self.title_label.master.pack_forget() # Forget the clipper frame
+
+                if hasattr(self, 'duration_display_frame'): # Center duration display
                     self.duration_display_frame.pack_forget()
                     self.duration_display_frame.pack(in_=self.top_content_frame, anchor='center', expand=True, fill='both', padx=0, pady=0)
-                    print(f"DEBUG: WRAPPING: duration_display_frame repacked in top_content_frame (centered). Parent: {self.duration_display_frame.winfo_parent() if hasattr(self.duration_display_frame, 'winfo_exists') and self.duration_display_frame.winfo_exists() else 'N/A'}")
-                else:
-                    print(f"DEBUG: WRAPPING: duration_display_frame not found.")
-                self.top_content_frame.pack_forget()
-                self.top_content_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=0, pady=0)
-                print(f"DEBUG: WRAPPING: top_content_frame repacked to fill main_frame.")
-            else:
-                print(f"DEBUG: WRAPPING: top_content_frame not found.")
-            new_x = self._calculate_corner_x()
-            new_y = self._calculate_corner_y()
-            new_geometry = f"{self.wrapped_width}x{self.wrapped_height}+{new_x}+{new_y}"
-            print(f"DEBUG: WRAPPING: Setting geometry to: {new_geometry}")
-            self.geometry(new_geometry)
-            print(f"DEBUG: WRAPPING: Unbinding drag events, binding unwrap click.")
-            if hasattr(self, '_on_mouse_press_binding_id') and self._on_mouse_press_binding_id:
-                self.unbind("<ButtonPress-1>", self._on_mouse_press_binding_id)
-            if hasattr(self, '_on_mouse_release_binding_id') and self._on_mouse_release_binding_id:
-                self.unbind("<ButtonRelease-1>", self._on_mouse_release_binding_id)
-            if hasattr(self, '_on_mouse_drag_binding_id') and self._on_mouse_drag_binding_id:
-                self.unbind("<B1-Motion>", self._on_mouse_drag_binding_id)
-            self._unwrap_binding_id = self.bind("<ButtonPress-1>", self.toggle_wrap_view)
-            if hasattr(self, 'duration_display_frame') and self.duration_display_frame.winfo_exists():
-                 self.duration_display_frame.bind("<ButtonPress-1>", self.toggle_wrap_view)
-            if hasattr(self, 'countdown_label') and self.countdown_label and self.countdown_label.winfo_exists():
-                 self.countdown_label.bind("<ButtonPress-1>", self.toggle_wrap_view)
-            if hasattr(self, 'no_duration_label') and self.no_duration_label and self.no_duration_label.winfo_exists():
-                 self.no_duration_label.bind("<ButtonPress-1>", self.toggle_wrap_view)
-            print(f"DEBUG: WRAPPING: Unwrap click bound with ID: {self._unwrap_binding_id}")
-            if hasattr(self, 'wrap_button'):
-                self.wrap_button.config(text="↗️")
-                ToolTip(self.wrap_button, text="Restore Full View")
-            print(f"DEBUG: WRAPPING: Wrap button updated.")
-        else:
-            print(f"DEBUG: UNWRAPPING branch: self.is_wrapped is now False.")
+
+            # Start animation
+            self.anim_current_step = 0
+            self._animate_wrap(on_complete=self._setup_wrap_bindings_and_ui)
+
+        else: # Start unwrapping process
             logger.debug("Unwrapping popup...")
-            print(f"DEBUG: UNWRAPPING: Unbinding unwrap click events. Current _unwrap_binding_id: {self._unwrap_binding_id}")
-            if self._unwrap_binding_id:
-                self.unbind("<ButtonPress-1>", self._unwrap_binding_id)
-                if hasattr(self, 'duration_display_frame') and self.duration_display_frame.winfo_exists():
-                     self.duration_display_frame.unbind("<ButtonPress-1>")
-                if hasattr(self, 'countdown_label') and self.countdown_label and self.countdown_label.winfo_exists():
-                     self.countdown_label.unbind("<ButtonPress-1>")
-                if hasattr(self, 'no_duration_label') and self.no_duration_label and self.no_duration_label.winfo_exists():
-                     self.no_duration_label.unbind("<ButtonPress-1>")
-                self._unwrap_binding_id = None
-            print(f"DEBUG: UNWRAPPING: Unwrap click events unbound. _unwrap_binding_id is now {self._unwrap_binding_id}")
-            print(f"DEBUG: UNWRAPPING: Re-binding drag events.")
-            self._on_mouse_press_binding_id = self.bind("<ButtonPress-1>", self._on_mouse_press)
-            self._on_mouse_release_binding_id = self.bind("<ButtonRelease-1>", self._on_mouse_release)
-            self._on_mouse_drag_binding_id = self.bind("<B1-Motion>", self._on_mouse_drag)
-            if hasattr(self, 'top_content_frame'):
-                print(f"DEBUG: UNWRAPPING: Restoring layout within top_content_frame.")
-                if hasattr(self, 'duration_display_frame') and self.duration_display_frame.winfo_ismapped():
-                    self.duration_display_frame.pack_forget()
-                print(f"DEBUG: UNWRAPPING: duration_display_frame forgotten from top_content_frame.")
-                if hasattr(self, 'complete_button'):
-                    self.complete_button.pack(side=tk.LEFT, padx=(0,5))
-                if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master != self.top_content_frame: # master is clipper
-                    clipper = self.title_label.master
-                    clipper.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
-                elif hasattr(self, 'title_label'):
-                     self.title_label.pack(in_=self.top_content_frame, side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
-                print(f"DEBUG: UNWRAPPING: title_label repacked. Is mapped: {self.title_label.winfo_ismapped() if hasattr(self, 'title_label') and self.title_label.winfo_exists() else 'N/A'}")
-                if hasattr(self, 'duration_display_frame'):
-                    self.duration_display_frame.pack(in_=self.top_content_frame, side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0))
-                print(f"DEBUG: UNWRAPPING: duration_display_frame repacked into top_content_frame (original). Parent: {self.duration_display_frame.winfo_parent() if hasattr(self.duration_display_frame, 'winfo_exists') and self.duration_display_frame.winfo_exists() else 'N/A'}")
-                self.top_content_frame.pack_forget()
-                self.top_content_frame.pack(side=tk.TOP, fill=tk.X, pady=(0,2), anchor='n')
-                print(f"DEBUG: UNWRAPPING: top_content_frame's own packing restored in main_frame.")
-            else:
-                print(f"DEBUG: UNWRAPPING: top_content_frame not found.")
-            if hasattr(self, 'button_frame_ref'):
-                 self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2), ipady=2)
-            print(f"DEBUG: UNWRAPPING: button_frame_ref repacked. Is mapped: {self.button_frame_ref.winfo_ismapped() if hasattr(self.button_frame_ref, 'winfo_exists') and self.button_frame_ref.winfo_exists() else 'N/A'}")
-            restored_geometry = f"{self.width}x{self.initial_height}"
-            print(f"DEBUG: UNWRAPPING: Setting geometry to: {restored_geometry}")
-            self.geometry(restored_geometry)
-            print(f"DEBUG: UNWRAPPING: self.expanded_state_before_wrap = {self.expanded_state_before_wrap}")
-            if self.expanded_state_before_wrap:
-                print(f"DEBUG: UNWRAPPING: Calling self.toggle_expand_popup() to re-expand description.")
-                self.toggle_expand_popup()
-                print(f"DEBUG: UNWRAPPING: After toggle_expand_popup, self.is_expanded = {self.is_expanded}")
-            if hasattr(self, 'wrap_button'):
-                self.wrap_button.config(text="💊") # User changed icon
-                ToolTip(self.wrap_button, text="Minimize to Corner")
-            print(f"DEBUG: UNWRAPPING: Wrap button updated.")
-        logger.debug(f"toggle_wrap_view finished. is_wrapped: {self.is_wrapped}")
-        print(f"DEBUG: toggle_wrap_view EXIT: self.is_wrapped={self.is_wrapped}, current geometry={self.geometry()}")
+            # UI elements (complete_button, title_clipper, duration_display_frame in normal layout, button_frame_ref)
+            # will be re-packed by _setup_unwrap_bindings_and_ui after animation.
+            # For now, ensure top_content_frame is ready for its children to be repacked correctly.
+            # If duration_display_frame was centered, forget it.
+            if hasattr(self, 'duration_display_frame') and self.duration_display_frame.winfo_ismapped():
+                 # Check if it's centered (its parent is top_content_frame and it's filling)
+                 # This check is a bit heuristic. A more robust way is to store its original pack_info.
+                 if self.duration_display_frame.cget('anchor') == 'center':
+                      self.duration_display_frame.pack_forget()
+
+            self.anim_current_step = 0
+            self._animate_unwrap(on_complete=self._setup_unwrap_bindings_and_ui)
+
+        logger.debug(f"toggle_wrap_view finished initiating {'wrap' if self.is_wrapped else 'unwrap'} animation.")
 =======
     def toggle_wrap_view(self, event=None):
         logger.info(f"toggle_wrap_view called. Current is_wrapped: {self.is_wrapped}. Event: {event}")
