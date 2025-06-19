@@ -941,7 +941,7 @@ class TaskManagerApp:
                     default_target_x = 1530
                     default_target_y = 200
                     popup_initial_height = 85 # This is ReminderPopupUI's self.initial_height
-                    vertical_gap = popup_initial_height + 5 # Make gap full height + 5px margin
+                    vertical_gap = 15 # Smaller fixed gap for normal popups
 
                     next_y_position = default_target_y
 
@@ -997,16 +997,23 @@ class TaskManagerApp:
                     try:
                         screen_height = self.root.winfo_screenheight()
                         bottom_margin = 50
-                        logger.debug(f"POPUP_POS: Screen height: {screen_height}. Checking boundary for task {task_id} with y={next_y_position}, h={popup_initial_height}, margin={bottom_margin}")
-                        if next_y_position + popup_initial_height + bottom_margin > screen_height:
-                            logger.info(f"POPUP_POS: Calculated Y position {next_y_position} for task {task_id} too low, resetting to default {default_target_y}.")
+
+                        # New detailed logging for boundary check
+                        calculated_bottom_with_margin = next_y_position + popup_initial_height + bottom_margin
+                        logger.info(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): Calculated Y for new popup: {next_y_position}")
+                        logger.info(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): Popup height: {popup_initial_height}, Bottom margin: {bottom_margin}")
+                        logger.info(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): Required Y for bottom edge with margin: {calculated_bottom_with_margin}")
+                        logger.info(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): Screen height: {screen_height}")
+
+                        if calculated_bottom_with_margin > screen_height:
+                            logger.warning(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): Y position {next_y_position} (bottom edge {calculated_bottom_with_margin}) is TOO LOW for screen {screen_height}. Resetting to Y={default_target_y}.")
                             next_y_position = default_target_y
                         else:
-                            logger.debug(f"POPUP_POS: Y position {next_y_position} for task {task_id} is within screen boundary.")
+                            logger.info(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): Y position {next_y_position} (bottom edge {calculated_bottom_with_margin}) is OK for screen {screen_height}.")
                     except tk.TclError as e:
-                        logger.warning(f"POPUP_POS: Could not get screen height for boundary check (task {task_id}): {e}. Using Y={next_y_position} without check.")
+                        logger.warning(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): Could not get screen height: {e}. Using Y={next_y_position} without check.")
                     except AttributeError as e:
-                        logger.warning(f"POPUP_POS: self.root not available for screen height check (task {task_id}): {e}. Using Y={next_y_position} without check.")
+                        logger.warning(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): self.root not available for screen height: {e}. Using Y={next_y_position} without check.")
 
                     logger.info(f"POPUP_POS: Final calculated new popup position for task {task_id}: X={default_target_x}, Y={next_y_position}")
 
