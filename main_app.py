@@ -934,11 +934,90 @@ class TaskManagerApp:
                     app_callbacks = {
                         'reschedule': self.handle_reschedule_task,
                         'complete': self.handle_complete_task,
-                        'remove_from_active': self._remove_popup_from_active
+                        'remove_from_active': self._remove_popup_from_active,
+                        'request_wrap_position': self._calculate_next_wrap_position # Add this line
                     }
-                    popup = ReminderPopupUI(self.root, task_details, app_callbacks)
+                    # Default position for the first popup or if stacking resets
+                    default_target_x = 1530
+                    default_target_y = 200
+                    popup_initial_height = 85 # This is ReminderPopupUI's self.initial_height
+                    vertical_gap = popup_initial_height + 5 # Make gap full height + 5px margin
+
+                    next_y_position = default_target_y
+
+                    logger.debug(f"POPUP_POS: Initial next_y_position for task {task_id}: {next_y_position}")
+                    logger.debug(f"POPUP_POS: Active popups found: {len(self.active_popups)}")
+
+                    current_max_y = default_target_y
+                    if self.active_popups:
+                        active_popup_log_details = [] # For logging
+                        # Create a list of popups that currently exist to avoid issues if a popup is destroyed mid-iteration
+                        valid_popups_for_calc = []
+                        for p_id, p_inst in self.active_popups.items():
+                            if p_inst.winfo_exists():
+                                valid_popups_for_calc.append({'id': p_id, 'instance': p_inst})
+                            else:
+                                active_popup_log_details.append(f"id={p_id}, winfo_exists is False")
+
+                        processed_popup_count = 0
+                        for item in valid_popups_for_calc:
+                            active_popup_id = item['id']
+                            p_instance = item['instance']
+                            # Double check winfo_exists() again in case it was destroyed since list creation
+                            if p_instance.winfo_exists():
+                                try:
+                                    p_y = p_instance.winfo_y()
+                                    p_height = p_instance.winfo_height()
+                                    p_bottom_y = p_y + p_height
+                                    active_popup_log_details.append(f"id={active_popup_id}, y={p_y}, h={p_height}, bottom={p_bottom_y}")
+                                    current_max_y = max(current_max_y, p_bottom_y)
+                                    processed_popup_count +=1
+                                except tk.TclError:
+                                    logger.warning(f"POPUP_POS: TclError getting geometry for active popup {active_popup_id} (task {task_id}).")
+                                    active_popup_log_details.append(f"id={active_popup_id}, error getting geometry")
+                            else:
+                                # This case should be less common due to pre-filtering, but good to log
+                                active_popup_log_details.append(f"id={active_popup_id}, disappeared during processing")
+
+                        logger.debug(f"POPUP_POS: Details of active popups for task {task_id}: [{'; '.join(active_popup_log_details)}]")
+                        logger.debug(f"POPUP_POS: current_max_y after iterating {processed_popup_count} active popups for task {task_id}: {current_max_y}")
+
+                        if processed_popup_count == 0: # No popups were actually processed (all might have disappeared or errored)
+                             next_y_position = default_target_y
+                             logger.debug(f"POPUP_POS: No existing popups could be processed for task {task_id}, next_y set to default: {next_y_position}")
+                        elif current_max_y >= default_target_y :
+                            next_y_position = current_max_y + vertical_gap
+                            logger.debug(f"POPUP_POS: Popups exist for task {task_id}, next_y set to {current_max_y} + {vertical_gap} = {next_y_position}")
+                        else: # current_max_y is less than default_target_y (e.g. all are higher)
+                             next_y_position = default_target_y # Or default_target_y if logic intends to always start at least at default_y
+                             logger.debug(f"POPUP_POS: current_max_y ({current_max_y}) is less than default ({default_target_y}) for task {task_id}. next_y set to default: {next_y_position}")
+
+
+                    # Screen boundary check
+                    try:
+                        screen_height = self.root.winfo_screenheight()
+                        bottom_margin = 50
+                        logger.debug(f"POPUP_POS: Screen height: {screen_height}. Checking boundary for task {task_id} with y={next_y_position}, h={popup_initial_height}, margin={bottom_margin}")
+                        if next_y_position + popup_initial_height + bottom_margin > screen_height:
+                            logger.info(f"POPUP_POS: Calculated Y position {next_y_position} for task {task_id} too low, resetting to default {default_target_y}.")
+                            next_y_position = default_target_y
+                        else:
+                            logger.debug(f"POPUP_POS: Y position {next_y_position} for task {task_id} is within screen boundary.")
+                    except tk.TclError as e:
+                        logger.warning(f"POPUP_POS: Could not get screen height for boundary check (task {task_id}): {e}. Using Y={next_y_position} without check.")
+                    except AttributeError as e:
+                        logger.warning(f"POPUP_POS: self.root not available for screen height check (task {task_id}): {e}. Using Y={next_y_position} without check.")
+
+                    logger.info(f"POPUP_POS: Final calculated new popup position for task {task_id}: X={default_target_x}, Y={next_y_position}")
+
+                    # Instantiate ReminderPopupUI with calculated positions
+                    popup = ReminderPopupUI(self.root,
+                                              task_details,
+                                              app_callbacks,
+                                              target_x=default_target_x,
+                                              target_y=next_y_position)
                     self.active_popups[task_id] = popup
-                    logger.info(f"ReminderPopupUI created and added to active_popups for task ID {task_id}.")
+                    logger.info(f"ReminderPopupUI created for task ID {task_id} at X={default_target_x}, Y={next_y_position} and added to active_popups.")
 
         except queue.Empty:
             pass
@@ -947,6 +1026,64 @@ class TaskManagerApp:
 
         if not self.headless_mode and self.root and self.root.winfo_exists():
              self.root.after(250, self._check_reminder_queue)
+
+    def _calculate_next_wrap_position(self, wrapping_popup_id):
+        logger.debug(f"POPUP_WRAP_POS: Calculating next wrap position for popup ID: {wrapping_popup_id}")
+
+        try:
+            screen_w = self.root.winfo_screenwidth()
+            screen_h = self.root.winfo_screenheight()
+        except tk.TclError:
+            logger.warning("POPUP_WRAP_POS: Could not get screen dimensions, using fallback for base wrap corner.")
+            screen_w = 1920
+            screen_h = 1080
+
+        # Dimensions and padding for wrapped popups (from reminder_popup_ui.py)
+        wrapped_width = 110
+        wrapped_height = 40
+        edge_padding = 10 # Horizontal padding from screen edge
+        bottom_padding = 40 # Vertical padding from screen bottom (for the first popup)
+        inter_popup_gap = 5 # Vertical gap between stacked wrapped popups
+
+        base_x = screen_w - wrapped_width - edge_padding
+        base_y = screen_h - wrapped_height - bottom_padding
+
+        next_wrap_x = base_x # X position is fixed for vertical stacking from a corner
+        next_wrap_y = base_y
+
+        # Find Y positions of already wrapped popups that are at base_x
+        occupied_y_at_base_x = []
+        for popup_id, p_instance in self.active_popups.items():
+            if isinstance(p_instance, ReminderPopupUI) and \
+               p_instance.is_in_wrapped_state and \
+               p_instance.winfo_exists() and \
+               popup_id != wrapping_popup_id: # Exclude the one currently being wrapped
+                try:
+                    if p_instance.winfo_x() == base_x: # Only consider those in the same column
+                        occupied_y_at_base_x.append(p_instance.winfo_y())
+                except tk.TclError:
+                    logger.warning(f"POPUP_WRAP_POS: TclError getting geometry for wrapped popup {popup_id}")
+
+        if occupied_y_at_base_x:
+            occupied_y_at_base_x.sort() # Sorts from smallest Y (top-most) to largest Y (bottom-most)
+            # We want to place the new one above the highest (smallest Y value) existing one in the stack
+            highest_occupied_y = occupied_y_at_base_x[0] # Smallest Y is the top of the current stack
+            next_wrap_y = highest_occupied_y - wrapped_height - inter_popup_gap
+            logger.debug(f"POPUP_WRAP_POS: Other wrapped popups found at X={base_x}. Highest Y={highest_occupied_y}. New next_wrap_y={next_wrap_y}")
+        else:
+            logger.debug(f"POPUP_WRAP_POS: No other wrapped popups at X={base_x}. Using base_y: {next_wrap_y}")
+
+        # Screen top boundary check
+        top_margin = 10
+        if next_wrap_y < top_margin:
+            logger.warning(f"POPUP_WRAP_POS: Calculated wrap Y {next_wrap_y} too high, adjusting to {top_margin}. May cause overlap if many popups.")
+            next_wrap_y = top_margin
+            # Optional: could implement a horizontal shift here if vertical stack is full
+            # e.g., next_wrap_x = base_x - wrapped_width - inter_popup_gap
+            # and reset next_wrap_y to base_y, but this makes it more complex.
+
+        logger.info(f"POPUP_WRAP_POS: Final calculated wrap position for ID {wrapping_popup_id}: X={next_wrap_x}, Y={next_wrap_y}")
+        return (next_wrap_x, next_wrap_y)
 
     def handle_reschedule_task(self, task_id, minutes_to_add):
         logger.info(f"Attempting to reschedule task ID: {task_id} by {minutes_to_add} minutes.")

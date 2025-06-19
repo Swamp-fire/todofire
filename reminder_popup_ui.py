@@ -8,11 +8,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ReminderPopupUI(bs.Toplevel):
-    def __init__(self, parent, task, app_callbacks):
+    def __init__(self, parent, task, app_callbacks, target_x=1530, target_y=200): # Added target_x, target_y
         super().__init__(parent)
         self.overrideredirect(True)
         self.task = task
         self.app_callbacks = app_callbacks
+        logger.debug(f"POPUP_INIT (Task ID: {self.task.id if self.task else 'N/A'}): Received target_x={target_x}, target_y={target_y}")
         self.after_id = None
         self.is_expanded = False
         self._drag_offset_x = 0
@@ -23,13 +24,15 @@ class ReminderPopupUI(bs.Toplevel):
         self.expanded_state_before_wrap = False
         self._unwrap_binding_id = None
         self.nag_tts_after_id = None
+        self.is_in_wrapped_state = False
 
         self.width = 380
         self.initial_height = 85
         self.expanded_height = 215
 
-        self.anim_target_x = 1530
-        self.anim_target_y = 200
+        self.anim_target_x = target_x
+        self.anim_target_y = target_y
+        logger.debug(f"POPUP_INIT (Task ID: {self.task.id if self.task else 'N/A'}): Set self.anim_target_x={self.anim_target_x}, self.anim_target_y={self.anim_target_y}")
         # For horizontal slide from right:
         # We'll calculate the actual starting X in _animate_slide_in based on screen width.
         # These offsets will now primarily be used for the wrap/unwrap animation targets if needed,
@@ -103,6 +106,7 @@ class ReminderPopupUI(bs.Toplevel):
         self._animate_slide_in()
 
     def _animate_slide_in(self):
+        logger.debug(f"POPUP_ANIM_SLIDE_IN (Task ID: {self.task.id if self.task else 'N/A'}): Starting. Target X={self.anim_target_x}, Y={self.anim_target_y}")
         if self.animation_after_id: # Cancel any pending animation frame
             self.after_cancel(self.animation_after_id)
             self.animation_after_id = None
@@ -138,6 +142,8 @@ class ReminderPopupUI(bs.Toplevel):
         else:
             # Ensure final position and opacity
             self.geometry(f"{self.width}x{self.initial_height}+{self.anim_target_x}+{self.anim_target_y}")
+            final_geom_string = f"{self.width}x{self.initial_height}+{self.anim_target_x}+{self.anim_target_y}"
+            logger.debug(f"POPUP_ANIM_SLIDE_IN (Task ID: {self.task.id if self.task else 'N/A'}): Animation complete. Final geometry set to: {final_geom_string}")
             if not self.use_fade_effect:
                 self.attributes("-alpha", 1.0) # Ensure fully opaque
             else: # If somehow fade was on, ensure it ends at 1.0
@@ -187,11 +193,15 @@ class ReminderPopupUI(bs.Toplevel):
             if hasattr(self, 'destroy'):
                  self.destroy()
 
-    def _animate_wrap(self, on_complete=None):
+    def _animate_wrap(self, target_x_from_callback, target_y_from_callback, on_complete=None): # Renamed params for clarity
+        logger.debug(f"ANIM_WRAP: Called. Target from callback: X={target_x_from_callback}, Y={target_y_from_callback}. Current step: {self.anim_current_step}")
+        logger.debug(f"ANIM_WRAP: last_normal_geometry_before_wrap = '{self.last_normal_geometry_before_wrap}'")
+
         if self.animation_after_id:
             self.after_cancel(self.animation_after_id)
             self.animation_after_id = None
 
+        start_w, start_h, start_x, start_y = -1,-1,-1,-1 # Default error values
         try:
             parts = self.last_normal_geometry_before_wrap.split('x')
             start_w = int(parts[0])
@@ -199,17 +209,22 @@ class ReminderPopupUI(bs.Toplevel):
             start_h = int(parts[0])
             start_x = int(parts[1])
             start_y = int(parts[2])
+            logger.debug(f"ANIM_WRAP: Parsed start_geom: W={start_w}, H={start_h}, X={start_x}, Y={start_y}")
         except Exception as e:
-            logger.error(f"Could not parse last_normal_geometry_before_wrap: '{self.last_normal_geometry_before_wrap}'. Error: {e}. Halting wrap animation.")
-            self.geometry(f"{self.wrapped_width}x{self.wrapped_height}+{self._calculate_corner_x()}+{self._calculate_corner_y()}")
+            logger.error(f"ANIM_WRAP: Could not parse last_normal_geometry_before_wrap: '{self.last_normal_geometry_before_wrap}'. Error: {e}. Halting wrap animation.")
+            # Use target_x_from_callback, target_y_from_callback for snapping
+            self.geometry(f"{self.wrapped_width}x{self.wrapped_height}+{target_x_from_callback}+{target_y_from_callback}")
             if on_complete:
                 on_complete()
             return
 
+        # Target wrapped geometry uses passed-in coordinates
         target_w = self.wrapped_width
         target_h = self.wrapped_height
-        target_x = self._calculate_corner_x()
-        target_y = self._calculate_corner_y()
+        target_x = target_x_from_callback # Use from callback
+        target_y = target_y_from_callback # Use from callback
+        logger.debug(f"ANIM_WRAP: Calculated target_geom: W={target_w}, H={target_h}, X={target_x}, Y={target_y}")
+        logger.debug(f"ANIM_WRAP: About to check anim_current_step ({self.anim_current_step}) <= anim_total_steps ({self.anim_total_steps})")
 
         if self.anim_current_step <= self.anim_total_steps:
             progress = self.anim_current_step / self.anim_total_steps
@@ -222,7 +237,11 @@ class ReminderPopupUI(bs.Toplevel):
             self.geometry(f"{current_w}x{current_h}+{current_x}+{current_y}")
 
             self.anim_current_step += 1
-            self.animation_after_id = self.after(self.anim_delay_ms, lambda: self._animate_wrap(on_complete))
+            # Correctly pass all necessary arguments to the recursive call
+            self.animation_after_id = self.after(self.anim_delay_ms,
+                lambda: self._animate_wrap(target_x_from_callback=target_x,
+                                           target_y_from_callback=target_y,
+                                           on_complete=on_complete))
         else:
             self.geometry(f"{target_w}x{target_h}+{target_x}+{target_y}")
             self.anim_current_step = 0
@@ -277,35 +296,31 @@ class ReminderPopupUI(bs.Toplevel):
     def _setup_wrap_bindings_and_ui(self):
         logger.debug("Wrap animation complete. Setting up wrap bindings and UI.")
 
-        if hasattr(self, '_on_mouse_press_binding_id'):
-            if self._on_mouse_press_binding_id:
-                self.unbind("<ButtonPress-1>", self._on_mouse_press_binding_id)
-        # Fallback unbind (more robust)
-        self.unbind("<ButtonPress-1>")
+        # Remove all bindings for these events on self (the Toplevel window)
+        # These 'if hasattr' are just to prevent errors if the IDs were never set,
+        # but the unbind itself doesn't strictly need them if we unbind all for the sequence.
+        # However, the user's code had them, so keeping structure.
+        if hasattr(self, '_on_mouse_press_binding_id'): # 8 spaces
+            self.unbind("<ButtonPress-1>") # 12 spaces
+        if hasattr(self, '_on_mouse_release_binding_id'): # 8 spaces
+            self.unbind("<ButtonRelease-1>") # 12 spaces
+        if hasattr(self, '_on_mouse_drag_binding_id'): # 8 spaces
+            self.unbind("<B1-Motion>") # 12 spaces
+        logger.debug("Unbound general mouse drag/press events from Toplevel for wrapped state.") # 8 spaces
 
-        if hasattr(self, '_on_mouse_release_binding_id'):
-            if self._on_mouse_release_binding_id:
-                self.unbind("<ButtonRelease-1>", self._on_mouse_release_binding_id)
-        self.unbind("<ButtonRelease-1>")
+        # Add new binding for unwrapping
+        self._unwrap_binding_id = self.bind("<ButtonPress-1>", self.toggle_wrap_view) # 8 spaces
 
-        if hasattr(self, '_on_mouse_drag_binding_id'):
-            if self._on_mouse_drag_binding_id:
-                self.unbind("<B1-Motion>", self._on_mouse_drag_binding_id)
-        self.unbind("<B1-Motion>")
-        logger.debug("Unbound general mouse drag/press events from Toplevel for wrapped state.")
+        if hasattr(self, 'duration_display_frame') and self.duration_display_frame.winfo_exists(): # 8 spaces
+            self.duration_display_frame.bind("<ButtonPress-1>", self.toggle_wrap_view) # 12 spaces
+        if hasattr(self, 'countdown_label') and self.countdown_label and self.countdown_label.winfo_exists(): # 8 spaces
+            self.countdown_label.bind("<ButtonPress-1>", self.toggle_wrap_view) # 12 spaces
+        if hasattr(self, 'no_duration_label') and self.no_duration_label and self.no_duration_label.winfo_exists(): # 8 spaces
+            self.no_duration_label.bind("<ButtonPress-1>", self.toggle_wrap_view) # 12 spaces
 
-        self._unwrap_binding_id = self.bind("<ButtonPress-1>", self.toggle_wrap_view)
-
-        if hasattr(self, 'duration_display_frame') and self.duration_display_frame.winfo_exists():
-            self.duration_display_frame.bind("<ButtonPress-1>", self.toggle_wrap_view)
-        if hasattr(self, 'countdown_label') and self.countdown_label and self.countdown_label.winfo_exists():
-            self.countdown_label.bind("<ButtonPress-1>", self.toggle_wrap_view)
-        if hasattr(self, 'no_duration_label') and self.no_duration_label and self.no_duration_label.winfo_exists():
-            self.no_duration_label.bind("<ButtonPress-1>", self.toggle_wrap_view)
-
-        if hasattr(self, 'wrap_button'):
-            self.wrap_button.config(text="↗️")
-            ToolTip(self.wrap_button, text="Restore Full View")
+        if hasattr(self, 'wrap_button'): # 8 spaces
+            self.wrap_button.config(text="↗️") # 12 spaces
+            ToolTip(self.wrap_button, text="Restore Full View") # 12 spaces
 
         self.is_animating_wrap_unwrap = False # Reset flag after all setup is done
         logger.debug("Wrap setup complete, animation guard released.")
@@ -313,51 +328,48 @@ class ReminderPopupUI(bs.Toplevel):
     def _setup_unwrap_bindings_and_ui(self):
         logger.debug("Unwrap animation complete. Setting up unwrap bindings and UI.")
 
-        if hasattr(self, '_unwrap_binding_id') and self._unwrap_binding_id:
-            self.unbind("<ButtonPress-1>", self._unwrap_binding_id)
-        # Fallback unbind
-        self.unbind("<ButtonPress-1>")
-        logger.debug("Unbound <ButtonPress-1> (for unwrap click) from Toplevel.")
-        self._unwrap_binding_id = None
+        self.unbind("<ButtonPress-1>") # 8 spaces
+        logger.debug("Unbound <ButtonPress-1> (for unwrap click) from Toplevel.") # 8 spaces
+        self._unwrap_binding_id = None # 8 spaces
 
-        if hasattr(self, 'duration_display_frame') and self.duration_display_frame.winfo_exists():
-            self.duration_display_frame.unbind("<ButtonPress-1>")
-        if hasattr(self, 'countdown_label') and self.countdown_label and self.countdown_label.winfo_exists():
-            self.countdown_label.unbind("<ButtonPress-1>")
-        if hasattr(self, 'no_duration_label') and self.no_duration_label and self.no_duration_label.winfo_exists():
-            self.no_duration_label.unbind("<ButtonPress-1>")
+        if hasattr(self, 'duration_display_frame') and self.duration_display_frame.winfo_exists(): # 8 spaces
+            self.duration_display_frame.unbind("<ButtonPress-1>") # 12 spaces
+        if hasattr(self, 'countdown_label') and self.countdown_label and self.countdown_label.winfo_exists(): # 8 spaces
+            self.countdown_label.unbind("<ButtonPress-1>") # 12 spaces
+        if hasattr(self, 'no_duration_label') and self.no_duration_label and self.no_duration_label.winfo_exists(): # 8 spaces
+            self.no_duration_label.unbind("<ButtonPress-1>") # 12 spaces
 
-        self._on_mouse_press_binding_id = self.bind("<ButtonPress-1>", self._on_mouse_press)
-        self._on_mouse_release_binding_id = self.bind("<ButtonRelease-1>", self._on_mouse_release)
-        self._on_mouse_drag_binding_id = self.bind("<B1-Motion>", self._on_mouse_drag)
-        logger.debug("Re-bound mouse drag events to Toplevel for normal state.")
+        self._on_mouse_press_binding_id = self.bind("<ButtonPress-1>", self._on_mouse_press) # 8 spaces
+        self._on_mouse_release_binding_id = self.bind("<ButtonRelease-1>", self._on_mouse_release) # 8 spaces
+        self._on_mouse_drag_binding_id = self.bind("<B1-Motion>", self._on_mouse_drag) # 8 spaces
+        logger.debug("Re-bound mouse drag events to Toplevel for normal state.") # 8 spaces
 
-        if hasattr(self, 'top_content_frame'):
-            if hasattr(self, 'duration_display_frame') and self.duration_display_frame.winfo_ismapped():
-                self.duration_display_frame.pack_forget()
+        if hasattr(self, 'top_content_frame'): # 8 spaces
+            if hasattr(self, 'duration_display_frame') and self.duration_display_frame.winfo_ismapped(): # 12 spaces
+                self.duration_display_frame.pack_forget() # 16 spaces
 
-            if hasattr(self, 'complete_button'):
-                self.complete_button.pack(side=tk.LEFT, padx=(3, 3))
+            if hasattr(self, 'complete_button'): # 12 spaces
+                self.complete_button.pack(side=tk.LEFT, padx=(3, 3)) # 16 spaces
 
-            if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master != self.top_content_frame :
-                clipper = self.title_label.master
-                clipper.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
-            elif hasattr(self, 'title_label'):
-                self.title_label.pack(in_=self.top_content_frame, side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5))
+            if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master != self.top_content_frame : # 12 spaces
+                clipper = self.title_label.master # 16 spaces
+                clipper.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5)) # 16 spaces
+            elif hasattr(self, 'title_label'): # 12 spaces
+                 self.title_label.pack(in_=self.top_content_frame, side=tk.LEFT, fill=tk.X, expand=True, padx=(0,5)) # 16 spaces
 
-            if hasattr(self, 'duration_display_frame'):
-                self.duration_display_frame.pack(in_=self.top_content_frame, side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0))
+            if hasattr(self, 'duration_display_frame'): # 12 spaces
+                self.duration_display_frame.pack(in_=self.top_content_frame, side=tk.RIGHT, fill=tk.NONE, expand=False, padx=(5,0)) # 16 spaces
 
-        if hasattr(self, 'button_frame_ref'):
-             self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2), ipady=2)
+        if hasattr(self, 'button_frame_ref'): # 8 spaces
+             self.button_frame_ref.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(3,2), ipady=2) # 12 spaces
 
-        if hasattr(self, 'wrap_button'):
-            self.wrap_button.config(text="💊")
-            ToolTip(self.wrap_button, text="Minimize to Corner")
+        if hasattr(self, 'wrap_button'): # 8 spaces
+            self.wrap_button.config(text="💊") # 12 spaces
+            ToolTip(self.wrap_button, text="Minimize to Corner") # 12 spaces
 
-        if self.expanded_state_before_wrap:
-            self.is_expanded = False
-            self.toggle_expand_popup()
+        if self.expanded_state_before_wrap: # 8 spaces
+            self.is_expanded = False # 12 spaces
+            self.toggle_expand_popup() # 12 spaces
 
         self.is_animating_wrap_unwrap = False # Reset flag after all setup is done
         logger.debug("Unwrap setup complete, animation guard released.")
@@ -612,7 +624,7 @@ class ReminderPopupUI(bs.Toplevel):
 
     def toggle_wrap_view(self, event=None):
         if self.is_animating_wrap_unwrap:
-            logger.debug("Wrap/unwrap animation already in progress. Ignoring toggle request.")
+            logger.debug("Wrap/unwrap animation or setup already in progress. Ignoring toggle request.")
             return
         self.is_animating_wrap_unwrap = True # Set flag
 
@@ -625,6 +637,8 @@ class ReminderPopupUI(bs.Toplevel):
         self.is_wrapped = not self.is_wrapped
 
         if self.is_wrapped: # Start wrapping process
+            self.is_in_wrapped_state = True
+            logger.debug("Set is_in_wrapped_state to True")
             logger.debug("Wrapping popup...")
             # Store current geometry (full string: "widthxheight+x+y")
             self.last_normal_geometry_before_wrap = self.geometry()
@@ -642,19 +656,55 @@ class ReminderPopupUI(bs.Toplevel):
             # Modify layout within top_content_frame for wrapped view
             if hasattr(self, 'top_content_frame'):
                 if hasattr(self, 'complete_button') and self.complete_button.winfo_ismapped():
-                    self.complete_button.pack_forget()
-                if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master.winfo_ismapped(): # title_label.master is the clipper
-                    self.title_label.master.pack_forget() # Forget the clipper frame
+                    self.complete_button.pack_forget() # UNCOMMENT THIS LINE
+                    logger.debug("Wrap: complete_button forgotten.")
+                # else: # Optional: log if not found/mapped
+                #    logger.debug("Wrap: complete_button not found or not mapped.")
 
-                if hasattr(self, 'duration_display_frame'): # Center duration display
-                    self.duration_display_frame.pack_forget()
+                # UNCOMMENT THIS BLOCK for title_label.master:
+                if hasattr(self, 'title_label') and hasattr(self.title_label, 'master') and self.title_label.master.winfo_ismapped():
+                    self.title_label.master.pack_forget() # title_label.master is the clipper frame
+                    logger.debug("Wrap: title_label.master (clipper) forgotten.")
+                # else: # Optional: log if not found/mapped
+                #    logger.debug("Wrap: title_label.master (clipper) not found or not mapped.")
+
+                # UNCOMMENT THIS BLOCK for duration_display_frame:
+                if hasattr(self, 'duration_display_frame'):
+                    if self.duration_display_frame.winfo_ismapped(): # Check if mapped before forgetting
+                        self.duration_display_frame.pack_forget()
+                        logger.debug("Wrap: duration_display_frame forgotten before re-pack.")
+                    # Re-pack centered and expanded for wrapped view
                     self.duration_display_frame.pack(in_=self.top_content_frame, anchor='center', expand=True, fill='both', padx=0, pady=0)
+                    logger.debug("Wrap: duration_display_frame re-packed centered and expanded.")
+                # else: # Optional: log if not found
+                #    logger.debug("Wrap: duration_display_frame not found.")
 
             # Start animation
             self.anim_current_step = 0
-            self._animate_wrap(on_complete=self._setup_wrap_bindings_and_ui)
+            wrap_target_x = self._calculate_corner_x() # Default/fallback X
+            wrap_target_y = self._calculate_corner_y() # Default/fallback Y
+
+            if self.app_callbacks and 'request_wrap_position' in self.app_callbacks:
+                try:
+                    # Pass a unique identifier for the popup, e.g., self.task.id
+                    # The callback in TaskManagerApp is defined as _calculate_next_wrap_position(self, wrapping_popup_id)
+                    # So we need to pass the ID.
+                    calculated_pos = self.app_callbacks['request_wrap_position'](self.task.id if self.task else None)
+                    if calculated_pos and isinstance(calculated_pos, tuple) and len(calculated_pos) == 2:
+                        wrap_target_x, wrap_target_y = calculated_pos
+                        logger.info(f"Using calculated wrap position: X={wrap_target_x}, Y={wrap_target_y}")
+                    else:
+                        logger.warning("Failed to get valid calculated wrap position, using default corner.")
+                except Exception as e:
+                    logger.error(f"Error calling 'request_wrap_position' callback: {e}. Using default corner.", exc_info=True)
+            else:
+                logger.warning("'request_wrap_position' callback not found. Using default corner.")
+
+            self._animate_wrap(target_x_from_callback=wrap_target_x, target_y_from_callback=wrap_target_y, on_complete=self._setup_wrap_bindings_and_ui)
 
         else: # Start unwrapping process
+            self.is_in_wrapped_state = False
+            logger.debug("Set is_in_wrapped_state to False")
             logger.debug("Unwrapping popup...")
             # UI elements (complete_button, title_clipper, duration_display_frame in normal layout, button_frame_ref)
             # will be re-packed by _setup_unwrap_bindings_and_ui after animation.
@@ -738,3 +788,5 @@ if __name__ == '__main__':
     root.geometry("300x200")
     root.mainloop()
 ```
+
+[end of reminder_popup_ui.py]
