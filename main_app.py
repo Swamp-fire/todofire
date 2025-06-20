@@ -622,6 +622,7 @@ class TaskManagerApp:
                 # Determine the status to be saved
                 status_to_save = task_before_edit.status # Default to original status
 
+                task_id_being_edited = self.currently_editing_task_id # Store before clearing
                 # task_due_datetime_iso is the new due date string from the form (or None if cleared/invalid)
                 new_due_date_iso_from_form = task_due_datetime_iso
 
@@ -656,7 +657,16 @@ class TaskManagerApp:
                                  last_reset_date=updated_last_reset_date)
                 success = database_manager.update_task(conn_save, task_data_obj)
                 if success:
-                    try:
+                    # ADD POPUP CLOSING LOGIC HERE FOR UPDATED TASK
+                    logger.info(f"Task ID {task_id_being_edited} updated. Checking for active popup.")
+                    if task_id_being_edited in self.active_popups:
+                        active_popup_instance = self.active_popups.get(task_id_being_edited)
+                        if active_popup_instance and active_popup_instance.winfo_exists():
+                            logger.info(f"Closing active popup for updated task ID: {task_id_being_edited}")
+                            active_popup_instance._cleanup_and_destroy()
+                        # No else needed, if not found or not existing, just proceed
+
+                    try: # Keep original messagebox
                         messagebox.showinfo("Success", "Task updated successfully!", parent=self.root)
                     except tk.TclError: logger.info("Success: Task updated (messagebox not available).")
                     self.clear_form_fields_and_reset_state()
