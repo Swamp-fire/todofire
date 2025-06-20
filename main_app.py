@@ -18,10 +18,30 @@ import sys
 logger = logging.getLogger(__name__)
 
 class TaskManagerApp:
+    # Constants for popup positioning
+    POPUP_INITIAL_X = 1530  # Default starting X (adjust if screen-dependent)
+    POPUP_INITIAL_Y = 200
+    POPUP_DEFAULT_WIDTH = 350 # Width of the popup (ReminderPopupUI.width)
+    POPUP_DEFAULT_HEIGHT = 85 # Initial height of the popup (ReminderPopupUI.initial_height)
+    POPUP_VERTICAL_GAP = 15
+    POPUP_HORIZONTAL_GAP = 15
+    POPUP_BOTTOM_MARGIN = 50 # Padding from bottom of screen
+    POPUP_LEFT_MARGIN = 10   # Padding from left of screen for column shifts
+
     def __init__(self, root_window, headless_mode=False):
         self.headless_mode = headless_mode
         self.root = root_window
         self.active_popups = {}
+
+        # Initialize next popup positions
+        # POPUP_INITIAL_X might be refined if dependent on self.root after it's confirmed to exist
+        if not self.headless_mode and self.root:
+             # Example of screen-dependent initial X (could be more complex)
+             # self.POPUP_INITIAL_X = self.root.winfo_screenwidth() - self.POPUP_DEFAULT_WIDTH - self.POPUP_HORIZONTAL_GAP
+             # For now, using the class constant directly.
+             pass
+        self.popup_next_x = TaskManagerApp.POPUP_INITIAL_X
+        self.popup_next_y = TaskManagerApp.POPUP_INITIAL_Y
 
         logger.info(f"Initializing TaskManagerApp in {'HEADLESS' if self.headless_mode else 'GUI'} mode.")
 
@@ -945,96 +965,46 @@ class TaskManagerApp:
                         'reschedule': self.handle_reschedule_task,
                         'complete': self.handle_complete_task,
                         'remove_from_active': self._remove_popup_from_active,
-                        'request_wrap_position': self._calculate_next_wrap_position # Add this line
+                        'request_wrap_position': self._calculate_next_wrap_position
                     }
-                    # Default position for the first popup or if stacking resets
-                    default_target_x = 1530
-                    default_target_y = 200
-                    popup_initial_height = 85 # This is ReminderPopupUI's self.initial_height
-                    vertical_gap = 15 # Smaller fixed gap for normal popups
 
-                    next_y_position = default_target_y
+                    # Use current next_x and next_y for this popup
+                    target_x = self.popup_next_x
+                    target_y = self.popup_next_y
+                    logger.info(f"POPUP_STACKING: New popup (Task ID: {task_id}) target: X={target_x}, Y={target_y}")
 
-                    logger.debug(f"POPUP_POS: Initial next_y_position for task {task_id}: {next_y_position}")
-                    logger.debug(f"POPUP_POS: Active popups found: {len(self.active_popups)}")
+                    # Advance self.popup_next_y for the *next* potential popup in the same column
+                    self.popup_next_y += TaskManagerApp.POPUP_DEFAULT_HEIGHT + TaskManagerApp.POPUP_VERTICAL_GAP
+                    logger.info(f"POPUP_STACKING: Next potential Y in column after this one: {self.popup_next_y}")
 
-                    current_max_y = default_target_y
-                    if self.active_popups:
-                        active_popup_log_details = [] # For logging
-                        # Create a list of popups that currently exist to avoid issues if a popup is destroyed mid-iteration
-                        valid_popups_for_calc = []
-                        for p_id, p_inst in self.active_popups.items():
-                            if p_inst.winfo_exists():
-                                valid_popups_for_calc.append({'id': p_id, 'instance': p_inst})
-                            else:
-                                active_popup_log_details.append(f"id={p_id}, winfo_exists is False")
-
-                        processed_popup_count = 0
-                        for item in valid_popups_for_calc:
-                            active_popup_id = item['id']
-                            p_instance = item['instance']
-                            # Double check winfo_exists() again in case it was destroyed since list creation
-                            if p_instance.winfo_exists():
-                                try:
-                                    p_y = p_instance.winfo_y()
-                                    p_height = p_instance.winfo_height()
-                                    p_bottom_y = p_y + p_height
-                                    active_popup_log_details.append(f"id={active_popup_id}, y={p_y}, h={p_height}, bottom={p_bottom_y}")
-                                    current_max_y = max(current_max_y, p_bottom_y)
-                                    processed_popup_count +=1
-                                except tk.TclError:
-                                    logger.warning(f"POPUP_POS: TclError getting geometry for active popup {active_popup_id} (task {task_id}).")
-                                    active_popup_log_details.append(f"id={active_popup_id}, error getting geometry")
-                            else:
-                                # This case should be less common due to pre-filtering, but good to log
-                                active_popup_log_details.append(f"id={active_popup_id}, disappeared during processing")
-
-                        logger.debug(f"POPUP_POS: Details of active popups for task {task_id}: [{'; '.join(active_popup_log_details)}]")
-                        logger.debug(f"POPUP_POS: current_max_y after iterating {processed_popup_count} active popups for task {task_id}: {current_max_y}")
-
-                        if processed_popup_count == 0: # No popups were actually processed (all might have disappeared or errored)
-                             next_y_position = default_target_y
-                             logger.debug(f"POPUP_POS: No existing popups could be processed for task {task_id}, next_y set to default: {next_y_position}")
-                        elif current_max_y >= default_target_y :
-                            next_y_position = current_max_y + vertical_gap
-                            logger.debug(f"POPUP_POS: Popups exist for task {task_id}, next_y set to {current_max_y} + {vertical_gap} = {next_y_position}")
-                        else: # current_max_y is less than default_target_y (e.g. all are higher)
-                             next_y_position = default_target_y # Or default_target_y if logic intends to always start at least at default_y
-                             logger.debug(f"POPUP_POS: current_max_y ({current_max_y}) is less than default ({default_target_y}) for task {task_id}. next_y set to default: {next_y_position}")
-
-
-                    # Screen boundary check
+                    # Screen Bottom Check
                     try:
                         screen_height = self.root.winfo_screenheight()
-                        bottom_margin = 50
+                        if self.popup_next_y + TaskManagerApp.POPUP_DEFAULT_HEIGHT + TaskManagerApp.POPUP_BOTTOM_MARGIN > screen_height:
+                            logger.warning(f"POPUP_STACKING: Screen bottom reached (next_y={self.popup_next_y}). Resetting Y to {TaskManagerApp.POPUP_INITIAL_Y}, Shifting X.")
+                            self.popup_next_y = TaskManagerApp.POPUP_INITIAL_Y
+                            self.popup_next_x -= (TaskManagerApp.POPUP_DEFAULT_WIDTH + TaskManagerApp.POPUP_HORIZONTAL_GAP)
+                            logger.info(f"POPUP_STACKING: New column X={self.popup_next_x}")
 
-                        # New detailed logging for boundary check
-                        calculated_bottom_with_margin = next_y_position + popup_initial_height + bottom_margin
-                        logger.info(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): Calculated Y for new popup: {next_y_position}")
-                        logger.info(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): Popup height: {popup_initial_height}, Bottom margin: {bottom_margin}")
-                        logger.info(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): Required Y for bottom edge with margin: {calculated_bottom_with_margin}")
-                        logger.info(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): Screen height: {screen_height}")
+                            # Screen Left Boundary Check
+                            if self.popup_next_x < TaskManagerApp.POPUP_LEFT_MARGIN:
+                                logger.warning(f"POPUP_STACKING: Screen left reached (next_x={self.popup_next_x}). Resetting X to {TaskManagerApp.POPUP_INITIAL_X}. Overlap may occur.")
+                                self.popup_next_x = TaskManagerApp.POPUP_INITIAL_X
+                                # Optionally, also reset Y if starting completely fresh, or handle overlap in other ways
+                                # self.popup_next_y = TaskManagerApp.POPUP_INITIAL_Y
+                    except (tk.TclError, AttributeError) as e:
+                        logger.warning(f"POPUP_STACKING: Could not get screen dimensions for boundary check: {e}. Stacking may behave unpredictably.")
+                        # Fallback: if screen size unknown, perhaps stop stacking or use a counter to limit columns/rows.
+                        # For now, it will continue with calculated next_x, next_y.
 
-                        if calculated_bottom_with_margin > screen_height:
-                            logger.warning(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): Y position {next_y_position} (bottom edge {calculated_bottom_with_margin}) is TOO LOW for screen {screen_height}. Resetting to Y={default_target_y}.")
-                            next_y_position = default_target_y
-                        else:
-                            logger.info(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): Y position {next_y_position} (bottom edge {calculated_bottom_with_margin}) is OK for screen {screen_height}.")
-                    except tk.TclError as e:
-                        logger.warning(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): Could not get screen height: {e}. Using Y={next_y_position} without check.")
-                    except AttributeError as e:
-                        logger.warning(f"POPUP_POS_BOUNDARY_CHECK (Task {task_id}): self.root not available for screen height: {e}. Using Y={next_y_position} without check.")
-
-                    logger.info(f"POPUP_POS: Final calculated new popup position for task {task_id}: X={default_target_x}, Y={next_y_position}")
-
-                    # Instantiate ReminderPopupUI with calculated positions
+                    # Instantiate ReminderPopupUI with calculated column-based positions
                     popup = ReminderPopupUI(self.root,
                                               task_details,
                                               app_callbacks,
-                                              target_x=default_target_x,
-                                              target_y=next_y_position)
+                                              target_x=target_x, # Use the determined target_x for this popup
+                                              target_y=target_y)  # Use the determined target_y for this popup
                     self.active_popups[task_id] = popup
-                    logger.info(f"ReminderPopupUI created for task ID {task_id} at X={default_target_x}, Y={next_y_position} and added to active_popups.")
+                    logger.info(f"ReminderPopupUI created for task ID {task_id} at X={target_x}, Y={target_y} and added to active_popups.")
 
         except queue.Empty:
             pass
@@ -1180,6 +1150,10 @@ class TaskManagerApp:
         if task_id in self.active_popups:
             del self.active_popups[task_id]
             logger.debug(f"Popup for task ID {task_id} removed from active list.")
+            if not self.active_popups: # Check if the list is now empty
+                self.popup_next_x = TaskManagerApp.POPUP_INITIAL_X
+                self.popup_next_y = TaskManagerApp.POPUP_INITIAL_Y
+                logger.info("POPUP_STACKING: All popups closed. Resetting next popup position to initial defaults.")
 
     def toggle_tts_mute(self, event=None):
         if tts_manager:
