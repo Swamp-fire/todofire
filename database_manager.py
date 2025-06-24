@@ -2,7 +2,9 @@ import sqlite3
 import datetime
 from datetime import time # Ensure time is available for type hinting and usage
 from task_model import Task
+import logging # Added for logging in new function
 
+logger = logging.getLogger(__name__) # Added for logging in new function
 DB_NAME = "tasks.db"
 
 def create_connection(db_file_name=DB_NAME):
@@ -113,6 +115,87 @@ def delete_task(conn, task_id: int):
     except sqlite3.Error as e:
         print(f"Error deleting task {task_id}: {e}")
         return False
+
+def update_task_status(conn, task_id, new_status):
+    sql = '''UPDATE Tasks SET status = ? WHERE id = ?'''
+    try:
+        cur = conn.cursor()
+        cur.execute(sql, (new_status, task_id))
+        conn.commit()
+        logger.info(f"Task ID {task_id} status updated to {new_status}. Rows affected: {cur.rowcount}")
+        return cur.rowcount > 0 # True if update was successful
+    except sqlite3.Error as e:
+        logger.error(f"Error updating task status for ID {task_id} to {new_status}: {e}", exc_info=True)
+        return False
+
+def _tasks_from_rows(rows):
+    """Helper function to convert rows of task data to Task objects."""
+    tasks = []
+    if rows:
+        for row in rows:
+            tasks.append(Task(id=row[0], title=row[1], description=row[2], duration=row[3],
+                              creation_date=row[4], repetition=row[5], priority=row[6], category=row[7],
+                              due_date=row[8], status=row[9], last_reset_date=row[10]))
+    return tasks
+
+def get_completed_tasks(conn):
+    """Fetches all tasks with status 'Completed', ordered by due date descending."""
+    logger.debug("Fetching completed tasks from database.")
+    cursor = conn.cursor()
+    tasks = []
+    try:
+        cursor.execute("SELECT * FROM Tasks WHERE status = 'Completed' ORDER BY due_date DESC")
+        rows = cursor.fetchall()
+        tasks = _tasks_from_rows(rows)
+        logger.info(f"Fetched {len(tasks)} completed tasks.")
+    except sqlite3.Error as e:
+        logger.error(f"Error getting completed tasks: {e}", exc_info=True)
+    return tasks
+
+def get_tasks_due_today(conn):
+    """Fetches all 'Pending' tasks due today, ordered by due date ascending."""
+    logger.debug("Fetching tasks due today from database.")
+    cursor = conn.cursor()
+    tasks = []
+    try:
+        today_iso_date_string = datetime.date.today().isoformat()
+        # Using DATE() function on due_date to compare only the date part.
+        cursor.execute("SELECT * FROM Tasks WHERE status = 'Pending' AND DATE(due_date) = DATE(?) ORDER BY due_date ASC", (today_iso_date_string,))
+        rows = cursor.fetchall()
+        tasks = _tasks_from_rows(rows)
+        logger.info(f"Fetched {len(tasks)} tasks due today.")
+    except sqlite3.Error as e:
+        logger.error(f"Error getting tasks due today: {e}", exc_info=True)
+    return tasks
+
+def get_missed_tasks(conn):
+    """Fetches all 'Pending' tasks with due dates before today, ordered by due date descending."""
+    logger.debug("Fetching missed tasks from database.")
+    cursor = conn.cursor()
+    tasks = []
+    try:
+        today_iso_date_string = datetime.date.today().isoformat()
+        cursor.execute("SELECT * FROM Tasks WHERE status = 'Pending' AND DATE(due_date) < DATE(?) ORDER BY due_date DESC", (today_iso_date_string,))
+        rows = cursor.fetchall()
+        tasks = _tasks_from_rows(rows)
+        logger.info(f"Fetched {len(tasks)} missed tasks.")
+    except sqlite3.Error as e:
+        logger.error(f"Error getting missed tasks: {e}", exc_info=True)
+    return tasks
+
+def get_skipped_tasks_db(conn):
+    """Fetches all tasks with status 'Skipped', ordered by due date descending."""
+    logger.debug("Fetching skipped tasks from database.")
+    cursor = conn.cursor()
+    tasks = []
+    try:
+        cursor.execute("SELECT * FROM Tasks WHERE status = 'Skipped' ORDER BY due_date DESC")
+        rows = cursor.fetchall()
+        tasks = _tasks_from_rows(rows)
+        logger.info(f"Fetched {len(tasks)} skipped tasks.")
+    except sqlite3.Error as e:
+        logger.error(f"Error getting skipped tasks: {e}", exc_info=True)
+    return tasks
 
 def check_timeslot_overlap(start_dt1: datetime.datetime, end_dt1: datetime.datetime,
                               start_dt2: datetime.datetime, end_dt2: datetime.datetime) -> bool:

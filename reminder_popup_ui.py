@@ -41,9 +41,9 @@ class ReminderPopupUI(bs.Toplevel):
         self.anim_start_x_offset = self.width # Start fully off-screen to the right relative to its own width
         self.anim_start_y_offset = 0         # No vertical offset for main slide
 
-        self.anim_total_steps = 20
+        self.anim_total_steps = 12 # Reduced from 20
         self.anim_current_step = 0
-        self.anim_delay_ms = 15    # e.g. 15ms for ~300ms total animation (20*15)
+        self.anim_delay_ms = 15    # Kept at 15ms. New total: 12 * 15ms = 180ms
         self.animation_after_id = None
         self.use_fade_effect = False # New flag to disable fade
 
@@ -545,6 +545,14 @@ class ReminderPopupUI(bs.Toplevel):
 
     def skip_reminder(self):
         self._cancel_nag_tts()
+        if self.app_callbacks and 'skip_task' in self.app_callbacks:
+            try:
+                logger.info(f"Popup: Calling 'skip_task' callback for task ID: {self.task.id if self.task else 'N/A'}")
+                self.app_callbacks['skip_task'](self.task.id if self.task else None)
+            except Exception as e:
+                logger.error(f"Popup: Error calling 'skip_task' callback: {e}", exc_info=True)
+        else:
+            logger.warning(f"Popup: 'skip_task' callback not found for task ID: {self.task.id if self.task else 'N/A'}")
         self._cleanup_and_destroy()
 
     def _cleanup_and_destroy(self):
