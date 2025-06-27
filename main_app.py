@@ -247,53 +247,64 @@ class TaskManagerApp:
         self.strip_title_entry.bind("<FocusOut>", self._on_title_focus_out)
         self._set_title_entry_appearance(focused=False)
 
-        # Get the background color and options for dynamic labels
-        temp_styled_frame = bs.Frame(self.creation_strip_frame, bootstyle="light") # Parent for temp_styled_frame is self.creation_strip_frame
+        # Change creation_strip_frame to dark
+        self.creation_strip_frame.config(bootstyle="dark") # Already created, so config
+
+        # Get the background color and options for dynamic labels (now for dark background)
+        temp_styled_frame = bs.Frame(self.creation_strip_frame, bootstyle="dark")
         temp_styled_frame.update_idletasks()
-        actual_light_bg_color = style.lookup(temp_styled_frame.winfo_class(), 'background')
+        actual_dark_bg_color = style.lookup(temp_styled_frame.winfo_class(), 'background')
         temp_styled_frame.destroy()
-        self.strip_label_options = {"background": actual_light_bg_color, "borderwidth": 0, "relief": "flat"}
+        self.strip_label_options = {"background": actual_dark_bg_color, "borderwidth": 0, "relief": "flat"}
 
         # Repetition (Top Row, Col 2)
-        self.rep_field_frame = bs.Frame(self.creation_strip_frame, bootstyle="light")
+        self.rep_field_frame = bs.Frame(self.creation_strip_frame, bootstyle="dark")
         self.rep_field_frame.grid(row=0, column=2, padx=grid_item_padx, pady=grid_item_pady, sticky="w")
-        self.strip_repetition_button = bs.Button(self.rep_field_frame, text="🔁", bootstyle="secondary-outline", command=self._open_repetition_popup)
+        self.strip_repetition_button = bs.Button(self.rep_field_frame, text="🔁", bootstyle="link", command=self._open_repetition_popup) # Changed to link
         self.strip_repetition_button.pack(side=tk.LEFT, padx=(0,1))
         # Dynamic label self.strip_repetition_display_label managed by _update_or_create_display_label
 
         # Due Date (Top Row, Col 3)
-        self.due_date_field_frame = bs.Frame(self.creation_strip_frame, bootstyle="light")
+        self.due_date_field_frame = bs.Frame(self.creation_strip_frame, bootstyle="dark")
         self.due_date_field_frame.grid(row=0, column=3, padx=grid_item_padx, pady=grid_item_pady, sticky="w")
-        self.strip_due_date_button = bs.Button(self.due_date_field_frame, text="📅", bootstyle="secondary-outline", command=self._open_due_date_popup)
+        self.strip_due_date_button = bs.Button(self.due_date_field_frame, text="📅", bootstyle="link", command=self._open_due_date_popup) # Changed to link
         self.strip_due_date_button.pack(side=tk.LEFT, padx=(0,1))
         # Dynamic label self.strip_due_date_display_label
 
-        # --- Populate Bottom Row (row 1) ---
-        # Description (Bottom Row, Col 0)
-        self.desc_field_frame = bs.Frame(self.creation_strip_frame, bootstyle="light")
-        self.desc_field_frame.grid(row=1, column=0, padx=grid_item_padx, pady=grid_item_pady, sticky="ew")
-        self.strip_description_button = bs.Button(self.desc_field_frame, text="📝", bootstyle="secondary-outline", command=self._open_description_popup)
+        # --- Sub-Frame for Bottom Row for even spacing ---
+        bottom_row_frame = bs.Frame(self.creation_strip_frame, bootstyle="dark")
+        bottom_row_frame.grid(row=1, column=0, columnspan=4, sticky="ew", padx=0, pady=grid_item_pady[1])
+
+        # Configure bottom_row_frame with 4 equal-weight columns
+        for i in range(4):
+            bottom_row_frame.columnconfigure(i, weight=1)
+
+        # --- Populate Bottom Row (within bottom_row_frame) ---
+        # Description (Bottom Row, Col 0 of bottom_row_frame)
+        self.desc_field_frame = bs.Frame(bottom_row_frame, bootstyle="dark")
+        self.desc_field_frame.grid(row=0, column=0, padx=grid_item_padx, pady=0, sticky="ew")
+        self.strip_description_button = bs.Button(self.desc_field_frame, text="📝", bootstyle="link", command=self._open_description_popup) # Changed to link
         self.strip_description_button.pack(side=tk.LEFT, padx=(0,1))
         # Dynamic label self.strip_description_display_label
 
-        # Duration (Bottom Row, Col 1)
-        self.duration_field_frame = bs.Frame(self.creation_strip_frame, bootstyle="light")
-        self.duration_field_frame.grid(row=1, column=1, padx=grid_item_padx, pady=grid_item_pady, sticky="ew") # Aligns under Title
-        self.strip_duration_button = bs.Button(self.duration_field_frame, text="⏱️", bootstyle="secondary-outline", command=self._open_duration_popup)
+        # Duration (Bottom Row, Col 1 of bottom_row_frame)
+        self.duration_field_frame = bs.Frame(bottom_row_frame, bootstyle="dark")
+        self.duration_field_frame.grid(row=0, column=1, padx=grid_item_padx, pady=0, sticky="ew")
+        self.strip_duration_button = bs.Button(self.duration_field_frame, text="⏱️", bootstyle="link", command=self._open_duration_popup) # Changed to link
         self.strip_duration_button.pack(side=tk.LEFT, padx=(0,1))
         # Dynamic label self.strip_duration_display_label
 
-        # Category (Bottom Row, Col 2)
-        self.category_field_frame = bs.Frame(self.creation_strip_frame, bootstyle="light")
-        self.category_field_frame.grid(row=1, column=2, padx=grid_item_padx, pady=grid_item_pady, sticky="ew") # Aligns under Repetition
-        self.strip_category_button = bs.Button(self.category_field_frame, text="🏷️", bootstyle="secondary-outline", command=self._open_category_popup)
+        # Category (Bottom Row, Col 2 of bottom_row_frame)
+        self.category_field_frame = bs.Frame(bottom_row_frame, bootstyle="dark")
+        self.category_field_frame.grid(row=0, column=2, padx=grid_item_padx, pady=0, sticky="ew")
+        self.strip_category_button = bs.Button(self.category_field_frame, text="🏷️", bootstyle="link", command=self._open_category_popup) # Changed to link
         self.strip_category_button.pack(side=tk.LEFT, padx=(0,1))
         # Dynamic label self.strip_category_display_label
 
-        # Priority (Bottom Row, Col 3)
-        self.priority_field_frame = bs.Frame(self.creation_strip_frame, bootstyle="light")
-        self.priority_field_frame.grid(row=1, column=3, padx=grid_item_padx, pady=grid_item_pady, sticky="ew") # Aligns under Due Date
-        self.strip_priority_button = bs.Button(self.priority_field_frame, text="⭐", bootstyle="secondary-outline", command=self._open_priority_popup)
+        # Priority (Bottom Row, Col 3 of bottom_row_frame)
+        self.priority_field_frame = bs.Frame(bottom_row_frame, bootstyle="dark")
+        self.priority_field_frame.grid(row=0, column=3, padx=grid_item_padx, pady=0, sticky="ew")
+        self.strip_priority_button = bs.Button(self.priority_field_frame, text="⭐", bootstyle="link", command=self._open_priority_popup) # Changed to link
         self.strip_priority_button.pack(side=tk.LEFT, padx=(0,1))
         # Dynamic label self.strip_priority_display_label
 
