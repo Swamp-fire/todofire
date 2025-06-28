@@ -105,53 +105,96 @@ class TaskManagerApp:
 
         logger.info("TaskManagerApp initialization complete.")
 
+    def _toggle_sidebar_visibility(self):
+        if not hasattr(self, 'side_panel_frame') or not self.side_panel_frame:
+            logger.error("_toggle_sidebar_visibility: side_panel_frame not found.")
+            return
+
+        if self.side_panel_frame.winfo_ismapped():
+            self.side_panel_frame.grid_remove()
+            self.root.columnconfigure(0, weight=0) # Collapse column 0
+            logger.info("Sidebar hidden.")
+        else:
+            # Ensure correct gridding for the sidebar.
+            # Based on current setup: menu button is row 0, col 0.
+            # Sidebar will also start at row 0, col 0, and span full height.
+            # This might visually cover the menu button; behavior to be reviewed.
+            self.side_panel_frame.grid(row=0, column=0, sticky="nswe", rowspan=3, padx=(0,5), pady=0)
+            self.root.columnconfigure(0, weight=1) # Expand column 0
+            # self.side_panel_frame.lift() # Ensure it's on top if it was somehow obscured
+            logger.info("Sidebar shown.")
+
     def _setup_ui(self):
         if self.headless_mode or not self.root:
             logger.error("_setup_ui called in headless_mode or without root. This should not happen.")
             return
 
-        self.root.columnconfigure(0, weight=1)
-        self.root.columnconfigure(1, weight=3)
+        self.root.columnconfigure(0, weight=0) # Sidebar column, initial weight 0 (hidden)
+        self.root.columnconfigure(1, weight=3) # Main content column, dominant weight (restores 1:3 feel when sidebar shown)
 
-        self.root.rowconfigure(0, weight=0)
-        self.root.rowconfigure(1, weight=0)
-        self.root.rowconfigure(2, weight=1)
+        self.root.rowconfigure(0, weight=0) # For menu button / top part of sidebar
+        self.root.rowconfigure(1, weight=0) # For creation strip
+        self.root.rowconfigure(2, weight=1) # For task list
 
-        self.side_panel_frame = bs.Frame(self.root, padding=(10, 10), bootstyle="secondary")
-        self.side_panel_frame.grid(row=0, column=0, sticky="nswe", rowspan=3, padx=(0,5), pady=0)
+        # Menu toggle button
+        self.menu_toggle_button = bs.Button(self.root, text="☰", command=self._toggle_sidebar_visibility, bootstyle="primary-outline")
+        self.menu_toggle_button.grid(row=0, column=0, sticky="nw", padx=5, pady=5)
 
-        side_panel_title = bs.Label(self.side_panel_frame, text="Task Views", font=("-size 14 -weight bold"), bootstyle="inverse-secondary")
-        side_panel_title.pack(pady=(0,10), fill=tk.X)
+
+        self.side_panel_frame = bs.Frame(self.root, padding=(10, 10), bootstyle="dark")
+        # Initial state: hidden. Will be gridded by toggle function.
+
+        # Header for the sidebar (title + close button)
+        sidebar_header_frame = bs.Frame(self.side_panel_frame, bootstyle="dark")
+        sidebar_header_frame.pack(fill=tk.X, pady=(0, 10)) # Place before other sidebar content
+
+        side_panel_title = bs.Label(sidebar_header_frame, text="Task Views", font=("-size 14 -weight bold"), bootstyle="inverse-dark")
+        side_panel_title.pack(side=tk.LEFT, expand=True, fill=tk.X)
+
+        self.sidebar_close_button = bs.Button(sidebar_header_frame, text="❮", command=self._toggle_sidebar_visibility, bootstyle="link") # Simple link-style close
+        self.sidebar_close_button.pack(side=tk.RIGHT)
+        # Ensure the close button's foreground is visible on dark, link style should handle this.
+
+        # Changed button bootstyle for better contrast on dark background if needed.
+        # "light-pill" or "outline-light-pill" might be good options. Let's try "outline-light-pill".
+        # If "outline-light-pill" isn't ideal or available, "primary-pill" might be tried,
+        # or just rely on theme's default contrast for "outline-primary-pill" on dark.
+        # For now, let's try "outline-light-pill" as it explicitly suggests light elements for dark backgrounds.
+        side_button_style = "outline-light-pill"
 
         btn_all_tasks = bs.Button(
             self.side_panel_frame, text="All Tasks",
-            command=lambda: self._handle_menu_selection("all"), bootstyle="primary-outline"
+            command=lambda: self._handle_menu_selection("all"), bootstyle=side_button_style
         )
         btn_all_tasks.pack(fill=tk.X, pady=5, padx=5)
 
         btn_today_tasks = bs.Button(
             self.side_panel_frame, text="Today's Tasks",
-            command=lambda: self._handle_menu_selection("today"), bootstyle="primary-outline"
+            command=lambda: self._handle_menu_selection("today"), bootstyle=side_button_style
         )
         btn_today_tasks.pack(fill=tk.X, pady=5, padx=5)
 
         btn_completed_tasks = bs.Button(
             self.side_panel_frame, text="Completed Tasks",
-            command=lambda: self._handle_menu_selection("completed"), bootstyle="primary-outline"
+            command=lambda: self._handle_menu_selection("completed"), bootstyle=side_button_style
         )
         btn_completed_tasks.pack(fill=tk.X, pady=5, padx=5)
 
         btn_missed_skipped = bs.Button(
             self.side_panel_frame, text="Missing/Skipped",
-            command=lambda: self._handle_menu_selection("missed_skipped"), bootstyle="primary-outline"
+            command=lambda: self._handle_menu_selection("missed_skipped"), bootstyle=side_button_style
         )
         btn_missed_skipped.pack(fill=tk.X, pady=5, padx=5)
 
         btn_reschedule_section = bs.Button(
             self.side_panel_frame, text="Reschedule View",
-            command=lambda: self._handle_menu_selection("reschedule_section"), bootstyle="primary-outline"
+            command=lambda: self._handle_menu_selection("reschedule_section"), bootstyle=side_button_style
         )
         btn_reschedule_section.pack(fill=tk.X, pady=5, padx=5)
+
+        # Ensure side panel is hidden by default after setup
+        self.side_panel_frame.grid_remove()
+
 
         # self.global_controls_frame = bs.Frame(self.root, padding=(10, 5))
         # self.global_controls_frame.grid(row=0, column=1, sticky="ew", padx=10, pady=(5,0))
@@ -174,16 +217,17 @@ class TaskManagerApp:
         # The task list (tree_container_frame) is at self.root, row=2, column=1.
         # We will place the new creation strip above the task list.
 
-        tree_container_frame = bs.Frame(self.root, padding=(0, 0, 0, 0)) # Adjusted padding
-        tree_container_frame.grid(row=1, column=1, rowspan=2, sticky='nsew', padx=10, pady=(5, 10)) # Span row 1 and 2 for new layout
-                                                                                                 # pady adjusted for top
-        tree_container_frame.columnconfigure(0, weight=1)
-        # tree_container_frame.columnconfigure(1, weight=0) # This was for old list_title_label and top_right_actions_frame
+        # Main content area (creation strip + task list)
+        # This now starts at row 0 of column 1 and spans all 3 rows of the root grid.
+        tree_container_frame = bs.Frame(self.root, padding=(0, 0, 0, 0))
+        tree_container_frame.grid(row=0, column=1, rowspan=3, sticky='nsew', padx=10, pady=(5, 10))
 
-        # tree_container_frame.rowconfigure(0, weight=0) # Old: list_title_label and top_right_actions_frame
-        tree_container_frame.rowconfigure(0, weight=0) # New: For Creation Strip
-        tree_container_frame.rowconfigure(1, weight=0) # New: For list_title_label and top_right_actions_frame
-        tree_container_frame.rowconfigure(2, weight=1) # New: For card_list_outer_frame (actual list)
+        tree_container_frame.columnconfigure(0, weight=1) # Main content within this frame is single column
+
+        # Row configuration within tree_container_frame
+        tree_container_frame.rowconfigure(0, weight=0) # For Creation Strip
+        tree_container_frame.rowconfigure(1, weight=0) # For list_title_label and top_right_actions_frame
+        tree_container_frame.rowconfigure(2, weight=1) # For card_list_outer_frame (actual list)
 
 
         # --- New Creation Card/Strip ---
@@ -212,7 +256,7 @@ class TaskManagerApp:
         self.strip_add_button = bs.Button(
             self.creation_strip_frame,
             text="+",
-            bootstyle="success",
+            bootstyle="success-pill", # Attempting pill style
             command=self._create_task_from_strip,
             width=3 # Keep width small
         )
@@ -254,8 +298,37 @@ class TaskManagerApp:
         temp_styled_frame = bs.Frame(self.creation_strip_frame, bootstyle="dark")
         temp_styled_frame.update_idletasks()
         actual_dark_bg_color = style.lookup(temp_styled_frame.winfo_class(), 'background')
+
+        # Attempt to get default foreground for a label on a dark background
+        # This might need theme-specific state if 'dark' isn't a direct state for lookup
+        try:
+            # For a bs.Label, the ttk style name might be 'TLabel' or specific like 'dark.TLabel'
+            # We'll try with a bs.Label directly to see what foreground it gets.
+            temp_label_for_fg_check = bs.Label(temp_styled_frame, text="FG", bootstyle="dark") # Match parent
+            temp_label_for_fg_check.update_idletasks()
+            actual_dark_fg_color = temp_label_for_fg_check.cget('foreground')
+            if not actual_dark_fg_color or str(actual_dark_fg_color) == "": # Fallback if cget returns empty or invalid
+                 # Try ttk style lookup as a more robust method if cget fails for bs.Label
+                 actual_dark_fg_color = style.lookup("TLabel", "foreground", ("dark",)) # General state
+                 if not actual_dark_fg_color: # Further fallback
+                      actual_dark_fg_color = style.lookup("TLabel", "foreground") # Default foreground
+            temp_label_for_fg_check.destroy()
+        except tk.TclError: # Fallback if style lookup or cget fails
+            logger.warning("Could not dynamically determine dark theme label foreground color. Using fallback '#FFFFFF'.")
+            actual_dark_fg_color = "#FFFFFF" # Fallback to white
+        if not actual_dark_fg_color: # Final fallback if all else fails
+             actual_dark_fg_color = "#FFFFFF"
+             logger.warning("Dark theme label foreground color determination failed. Using hardcoded '#FFFFFF'.")
+
         temp_styled_frame.destroy()
-        self.strip_label_options = {"background": actual_dark_bg_color, "borderwidth": 0, "relief": "flat"}
+        self.strip_label_options = {
+            "background": actual_dark_bg_color,
+            "borderwidth": 0,
+            "relief": "flat",
+            "text_color": actual_dark_fg_color # Store the determined text color
+        }
+        logger.debug(f"Strip Label Options set: BG='{actual_dark_bg_color}', FG='{actual_dark_fg_color}'")
+
 
         # Repetition (Top Row, Col 2)
         self.rep_field_frame = bs.Frame(self.creation_strip_frame, bootstyle="dark")
@@ -320,11 +393,11 @@ class TaskManagerApp:
         top_right_actions_frame.grid(row=0, column=1, sticky='e') # Removed padx, pady
 
         edit_button = bs.Button(top_right_actions_frame, text="Edit Selected",
-                                command=self.load_selected_task_for_edit, bootstyle="info")
+                                command=self.load_selected_task_for_edit, bootstyle="info-pill") # Attempting pill
         edit_button.pack(side=tk.LEFT, padx=(0, 5))
 
         delete_button = bs.Button(top_right_actions_frame, text="Delete Selected",
-                                  command=self.delete_selected_task, bootstyle="danger")
+                                  command=self.delete_selected_task, bootstyle="danger-pill") # Attempting pill
         delete_button.pack(side=tk.LEFT, padx=(0, 5)) # Original had (0,5)
 
         self.card_list_outer_frame = bs.Frame(tree_container_frame)
@@ -648,10 +721,10 @@ class TaskManagerApp:
         button_frame = bs.Frame(popup)
         button_frame.pack(pady=10)
 
-        save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success")
+        save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success-pill") # Pill
         save_btn.pack(side=tk.LEFT, padx=5)
 
-        cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary")
+        cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary-pill") # Pill
         cancel_btn.pack(side=tk.LEFT, padx=5)
 
         # Center the popup relative to the root window
@@ -760,16 +833,16 @@ class TaskManagerApp:
 
         clear_btn_frame = bs.Frame(popup, padding=(5,0,5,5))
         clear_btn_frame.pack(fill=tk.X)
-        clear_due_date_btn = bs.Button(clear_btn_frame, text="No Due Date", command=on_clear_due_date, bootstyle="lightoutline")
+        clear_due_date_btn = bs.Button(clear_btn_frame, text="No Due Date", command=on_clear_due_date, bootstyle="outline-light-pill") # Pill
         clear_due_date_btn.pack(side=tk.LEFT, pady=(5,0))
 
         button_frame = bs.Frame(popup, padding=5)
         button_frame.pack(fill=tk.X, pady=(5,0)) # pady to give some space from content above
 
-        save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success")
+        save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success-pill") # Pill
         save_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
 
-        cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary")
+        cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary-pill") # Pill
         cancel_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
 
         popup.update_idletasks()
@@ -844,10 +917,10 @@ class TaskManagerApp:
         button_frame = bs.Frame(popup, padding=10)
         button_frame.pack(fill=tk.X, side=tk.BOTTOM) # Place buttons at the bottom
 
-        save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success")
+        save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success-pill") # Pill
         save_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
 
-        cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary")
+        cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary-pill") # Pill
         cancel_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
 
         popup.update_idletasks()
@@ -903,10 +976,10 @@ class TaskManagerApp:
         button_frame = bs.Frame(popup, padding=10)
         button_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
-        save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success")
+        save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success-pill") # Pill
         save_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
 
-        cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary")
+        cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary-pill") # Pill
         cancel_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
 
         popup.update_idletasks()
@@ -961,10 +1034,10 @@ class TaskManagerApp:
         button_frame = bs.Frame(popup)
         button_frame.pack(pady=10)
 
-        save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success")
+        save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success-pill") # Pill
         save_btn.pack(side=tk.LEFT, padx=5)
 
-        cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary")
+        cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary-pill") # Pill
         cancel_btn.pack(side=tk.LEFT, padx=5)
 
         popup.update_idletasks()
@@ -1007,10 +1080,10 @@ class TaskManagerApp:
             button_frame = bs.Frame(popup)
             button_frame.pack(pady=10)
 
-            save_btn = bs.Button(button_frame, text="Save", command=on_save_popup_action, bootstyle="success")
+            save_btn = bs.Button(button_frame, text="Save", command=on_save_popup_action, bootstyle="success-pill") # Pill
             save_btn.pack(side=tk.LEFT, padx=5)
 
-            cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel_popup_action, bootstyle="secondary")
+            cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel_popup_action, bootstyle="secondary-pill") # Pill
             cancel_btn.pack(side=tk.LEFT, padx=5)
 
             popup.update_idletasks()
@@ -1615,28 +1688,27 @@ class TaskManagerApp:
         - icon_button_widget: The icon button widget that the label should be packed next to.
         """
         label_widget = getattr(self, label_attr_name, None)
+        visible_fg_color = self.strip_label_options.get('text_color', '#FFFFFF') # Default to white if not set
+        hidden_fg_color = self.strip_label_options.get('background', '#000000') # Match background
 
-        if not text_to_display: # Empty text means hide the label
-            if label_widget and label_widget.winfo_exists() and label_widget.winfo_manager() == 'pack':
-                label_widget.pack_forget()
-                logger.debug(f"Hid label for {label_attr_name} as text is empty.")
-            # Optionally, could also do: setattr(self, label_attr_name, None); label_widget.destroy()
-            # For now, just hiding allows reuse and is simpler.
-        else: # Text is not empty, so create or update and show
-            if not label_widget or not label_widget.winfo_exists():
-                # Create label if it doesn't exist or was destroyed
-                label_widget = bs.Label(parent_frame, text=text_to_display, **self.strip_label_options)
-                setattr(self, label_attr_name, label_widget)
-                # Pack it next to the icon button
-                label_widget.pack(side=tk.LEFT, after=icon_button_widget, padx=(1,0)) # Small padx to separate from icon
-                logger.debug(f"Created and packed new label for {label_attr_name} with text: '{text_to_display}'")
-            else:
-                # Label exists, just update its text
-                label_widget.config(text=text_to_display)
-                # Ensure it's packed correctly if it was previously hidden
-                if not label_widget.winfo_ismapped(): # Check if it's not visible
-                     label_widget.pack(side=tk.LEFT, after=icon_button_widget, padx=(1,0))
-                logger.debug(f"Updated existing label for {label_attr_name} with text: '{text_to_display}'")
+        if not label_widget or not label_widget.winfo_exists():
+            # Create label if it doesn't exist or was destroyed.
+            # Initial text is empty, and it will be configured further down.
+            # Remove 'text_color' from options used for creation, as foreground is set dynamically.
+            creation_options = {k: v for k, v in self.strip_label_options.items() if k != 'text_color'}
+            label_widget = bs.Label(parent_frame, text="", **creation_options) # Initial text empty
+            setattr(self, label_attr_name, label_widget)
+            # Pack it next to the icon button. It stays packed.
+            label_widget.pack(side=tk.LEFT, after=icon_button_widget, padx=(1,0))
+            logger.debug(f"Created and packed new label for {label_attr_name}.")
+
+        # Now, configure text and foreground based on text_to_display
+        if not text_to_display: # Empty text means make label invisible by matching fg to bg
+            label_widget.config(text=" ", foreground=hidden_fg_color) # Use a space to maintain height
+            logger.debug(f"Made label {label_attr_name} invisible (text: ' ', fg: {hidden_fg_color}).")
+        else: # Text is not empty, so set text and make it visible
+            label_widget.config(text=text_to_display, foreground=visible_fg_color)
+            logger.debug(f"Made label {label_attr_name} visible (text: '{text_to_display}', fg: {visible_fg_color}).")
 
 
     def handle_skip_task(self, task_id):
