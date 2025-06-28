@@ -272,6 +272,35 @@ def check_time_only_overlap(st1: datetime.time, et1: datetime.time,
         # If both intervals span across midnight, they are guaranteed to overlap.
         return True
 
+def get_tasks_by_category(conn, category_name: str):
+    """Fetches all tasks matching a specific category name, ordered by creation_date DESC."""
+    logger.debug(f"Fetching tasks for category: {category_name}")
+    tasks = []
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM Tasks WHERE category = ? ORDER BY creation_date DESC", (category_name,))
+        rows = cursor.fetchall()
+        tasks = _tasks_from_rows(rows) # Use the existing helper
+        logger.info(f"Fetched {len(tasks)} tasks for category '{category_name}'.")
+    except sqlite3.Error as e:
+        logger.error(f"Error getting tasks for category {category_name}: {e}", exc_info=True)
+    return tasks
+
+def get_unique_categories(conn):
+    """Fetches all unique, non-empty category names from the Tasks table, sorted alphabetically."""
+    logger.debug("Fetching unique categories from database.")
+    cursor = conn.cursor()
+    categories = []
+    try:
+        # Select distinct categories, filter out NULL or empty strings, and order them
+        cursor.execute("SELECT DISTINCT category FROM Tasks WHERE category IS NOT NULL AND category != '' ORDER BY category ASC")
+        rows = cursor.fetchall()
+        categories = [row[0] for row in rows] # Extract the category name from each tuple
+        logger.info(f"Fetched {len(categories)} unique categories.")
+    except sqlite3.Error as e:
+        logger.error(f"Error getting unique categories: {e}", exc_info=True)
+    return categories
+
 if __name__ == '__main__':
     print("Database Manager Module Direct Test")
     # Test cases for check_time_only_overlap will be added here.

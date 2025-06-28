@@ -78,6 +78,15 @@ class TaskManagerApp:
         self.strip_priority_display_label = None
         self.strip_category_display_label = None
         self.strip_label_options = {} # Will be populated in _setup_ui
+        self.active_category_filter = None # For storing the category to filter by
+        self.label_placeholders = {
+            "strip_repetition_display_label": "        ",  # Approx 8 spaces for "Monthly "
+            "strip_due_date_display_label":   "               ", # Approx 15 spaces for "MMM DD, HH:MM"
+            "strip_duration_display_label":   "       ",  # Approx 7 spaces for "99h 55m"
+            "strip_description_display_label":"     ",    # Approx 5 spaces for "[...]"
+            "strip_priority_display_label":   "        ",  # Approx 8 spaces for "Medium  "
+            "strip_category_display_label":   "            "  # Approx 12 spaces
+        }
 
         self.reminder_queue = queue.Queue()
         self.scheduler = None
@@ -191,6 +200,16 @@ class TaskManagerApp:
             command=lambda: self._handle_menu_selection("reschedule_section"), bootstyle=side_button_style
         )
         btn_reschedule_section.pack(fill=tk.X, pady=5, padx=5)
+
+        # --- Categories Section in Sidebar ---
+        sep = bs.Separator(self.side_panel_frame, bootstyle="secondary")
+        sep.pack(fill=tk.X, pady=10, padx=5)
+
+        categories_title_label = bs.Label(self.side_panel_frame, text="Categories", font=("-size 12 -weight bold"), bootstyle="inverse-dark")
+        categories_title_label.pack(fill=tk.X, padx=5, pady=(0,5))
+
+        self.category_buttons_frame = bs.Frame(self.side_panel_frame, bootstyle="dark") # Match parent panel style
+        self.category_buttons_frame.pack(fill=tk.X, expand=False, padx=5, pady=0) # Fill X, but don't expand vertically unless content pushes
 
         # Ensure side panel is hidden by default after setup
         self.side_panel_frame.grid_remove()
@@ -370,7 +389,7 @@ class TaskManagerApp:
         # Category (Bottom Row, Col 2 of bottom_row_frame)
         self.category_field_frame = bs.Frame(bottom_row_frame, bootstyle="dark")
         self.category_field_frame.grid(row=0, column=2, padx=grid_item_padx, pady=0, sticky="ew")
-        self.strip_category_button = bs.Button(self.category_field_frame, text="🏷️", bootstyle="link", command=self._open_category_popup) # Changed to link
+        self.strip_category_button = bs.Button(self.category_field_frame, text="📁", bootstyle="link", command=self._open_category_popup) # Changed icon to folder
         self.strip_category_button.pack(side=tk.LEFT, padx=(0,1))
         # Dynamic label self.strip_category_display_label
 
@@ -438,6 +457,9 @@ class TaskManagerApp:
         self.task_list_canvas.bind_all("<Button-5>", self._on_mousewheel)
 
         self.task_tree = None # Remains None as Treeview is replaced by card view
+
+        # Initial population of category list in sidebar
+        self._refresh_category_sidebar_list()
 
     def _on_cards_frame_configure(self, event=None):
         if hasattr(self, 'task_list_canvas') and self.task_list_canvas.winfo_exists() and \
@@ -703,10 +725,9 @@ class TaskManagerApp:
         combo.set(current_repetition)
         combo.pack(pady=5, padx=20, fill=tk.X)
 
-        def on_save():
+        def on_repetition_select(event=None): # event=None for direct call if needed too
             self.strip_repetition_value = combo.get()
             logger.info(f"Repetition set to: {self.strip_repetition_value}")
-            # Use the new helper to update/create the display label
             self._update_or_create_display_label(
                 label_attr_name="strip_repetition_display_label",
                 parent_frame=self.rep_field_frame,
@@ -715,17 +736,9 @@ class TaskManagerApp:
             )
             popup.destroy()
 
-        def on_cancel():
-            popup.destroy()
+        combo.bind("<<ComboboxSelected>>", on_repetition_select)
 
-        button_frame = bs.Frame(popup)
-        button_frame.pack(pady=10)
-
-        save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success-pill") # Pill
-        save_btn.pack(side=tk.LEFT, padx=5)
-
-        cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary-pill") # Pill
-        cancel_btn.pack(side=tk.LEFT, padx=5)
+        # No Save/Cancel buttons needed anymore
 
         # Center the popup relative to the root window
         popup.update_idletasks() # Ensure dimensions are calculated
@@ -816,34 +829,22 @@ class TaskManagerApp:
         def on_cancel():
             popup.destroy()
 
-        # Optional: "No Due Date" button needs to update display label too
-        def on_clear_due_date():
-            self.strip_due_date_value = None
-            # Reset time values as well for consistency, though format_display will handle None date
-            self.strip_due_hour_value = "12"
-            self.strip_due_minute_value = "00"
-            logger.info("Due Date & Time cleared.")
-            self._update_or_create_display_label(
-                label_attr_name="strip_due_date_display_label",
-                parent_frame=self.due_date_field_frame,
-                text_to_display=self._format_display_due_date(), # Will return ""
-                icon_button_widget=self.strip_due_date_button
-            )
-            popup.destroy()
+        # Optional: "No Due Date" button needs to update display label too - REMOVED
+        # clear_btn_frame = bs.Frame(popup, padding=(5,0,5,5))
+        # clear_btn_frame.pack(fill=tk.X)
+        # clear_due_date_btn = bs.Button(clear_btn_frame, text="No Due Date", command=on_clear_due_date, bootstyle="outline-light-pill") # Pill
+        # clear_due_date_btn.pack(side=tk.LEFT, pady=(5,0))
 
-        clear_btn_frame = bs.Frame(popup, padding=(5,0,5,5))
-        clear_btn_frame.pack(fill=tk.X)
-        clear_due_date_btn = bs.Button(clear_btn_frame, text="No Due Date", command=on_clear_due_date, bootstyle="outline-light-pill") # Pill
-        clear_due_date_btn.pack(side=tk.LEFT, pady=(5,0))
+        # Save/Cancel buttons REMOVED
+        # button_frame = bs.Frame(popup, padding=5)
+        # button_frame.pack(fill=tk.X, pady=(5,0))
+        # save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success-pill")
+        # save_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
+        # cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary-pill")
+        # cancel_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
 
-        button_frame = bs.Frame(popup, padding=5)
-        button_frame.pack(fill=tk.X, pady=(5,0)) # pady to give some space from content above
-
-        save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success-pill") # Pill
-        save_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
-
-        cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary-pill") # Pill
-        cancel_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
+        # Bind window close ('X') to save action
+        popup.protocol("WM_DELETE_WINDOW", lambda p=popup, de=date_entry, hc=hour_combo, mc=minute_combo: self._on_due_date_popup_close(p, de, hc, mc))
 
         popup.update_idletasks()
         popup_width = popup.winfo_width()
@@ -858,6 +859,37 @@ class TaskManagerApp:
         x = root_x + (root_width // 2) - (popup_width // 2)
         y = root_y + (root_height // 2) - (popup_height // 2)
         popup.geometry(f'+{x}+{y}')
+
+    def _on_due_date_popup_close(self, popup, date_entry_widget, hour_combo_widget, minute_combo_widget):
+        """Handles saving the due date when the popup is closed."""
+        selected_date_str = date_entry_widget.entry.get()
+
+        if not selected_date_str: # If date entry is empty, consider it as no due date
+            self.strip_due_date_value = None
+            self.strip_due_hour_value = "12" # Reset to default or keep previous? For now, reset.
+            self.strip_due_minute_value = "00"
+            logger.info("Due Date popup closed with empty date field. Due date cleared.")
+        else:
+            try:
+                # Validate date format (DateEntry should ensure this, but double check)
+                datetime.datetime.strptime(selected_date_str, "%Y-%m-%d")
+                self.strip_due_date_value = selected_date_str
+                self.strip_due_hour_value = hour_combo_widget.get()
+                self.strip_due_minute_value = minute_combo_widget.get()
+                logger.info(f"Due Date popup closed. Due Date set to: {self.strip_due_date_value} {self.strip_due_hour_value}:{self.strip_due_minute_value}")
+            except ValueError:
+                logger.error(f"Invalid date format '{selected_date_str}' from DateEntry on popup close. Due date not updated.")
+                # Optionally, show a messagebox error to the user here if desired,
+                # but typically closing implies acceptance or cancellation of current state.
+                # For now, if invalid, it just doesn't update.
+
+        self._update_or_create_display_label(
+            label_attr_name="strip_due_date_display_label",
+            parent_frame=self.due_date_field_frame,
+            text_to_display=self._format_display_due_date(),
+            icon_button_widget=self.strip_due_date_button
+        )
+        popup.destroy()
 
     def _open_duration_popup(self):
         popup = bs.Toplevel(master=self.root, title="Set Duration") # Explicitly set master
@@ -914,14 +946,16 @@ class TaskManagerApp:
         def on_cancel():
             popup.destroy()
 
-        button_frame = bs.Frame(popup, padding=10)
-        button_frame.pack(fill=tk.X, side=tk.BOTTOM) # Place buttons at the bottom
+        # Remove Save/Cancel buttons
+        # button_frame = bs.Frame(popup, padding=10)
+        # button_frame.pack(fill=tk.X, side=tk.BOTTOM)
+        # save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success-pill")
+        # save_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
+        # cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary-pill")
+        # cancel_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
 
-        save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success-pill") # Pill
-        save_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
-
-        cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary-pill") # Pill
-        cancel_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
+        # Bind window close ('X') to save action
+        popup.protocol("WM_DELETE_WINDOW", lambda p=popup, hs=hours_spinbox, ms=minutes_spinbox: self._on_duration_popup_close(p, hs, ms))
 
         popup.update_idletasks()
         popup_width = popup.winfo_width()
@@ -933,6 +967,40 @@ class TaskManagerApp:
         x = root_x + (root_width // 2) - (popup_width // 2)
         y = root_y + (root_height // 2) - (popup_height // 2)
         popup.geometry(f'+{x}+{y}')
+
+    def _on_duration_popup_close(self, popup, hours_spinbox_widget, minutes_spinbox_widget):
+        """Handles saving the duration when the popup is closed."""
+        try:
+            hours = int(hours_spinbox_widget.get())
+            minutes = int(minutes_spinbox_widget.get())
+
+            if not (0 <= hours <= 99):
+                # Silently cap or ignore, or show error? For now, log and use previous if invalid.
+                logger.warning(f"Invalid hours value '{hours}' on duration popup close. Retaining previous.")
+                # Or: hours = max(0, min(99, hours)) # to cap
+            else:
+                self.strip_duration_hours_value = hours
+
+            if not (0 <= minutes <= 59):
+                logger.warning(f"Invalid minutes value '{minutes}' on duration popup close. Retaining previous.")
+                # Or: minutes = max(0, min(59, minutes)) # to cap
+            else:
+                self.strip_duration_minutes_value = minutes
+
+            logger.info(f"Duration popup closed. Duration set to: {self.strip_duration_hours_value}h {self.strip_duration_minutes_value}m")
+
+        except ValueError:
+            logger.error("Invalid non-numeric input for duration on popup close. Duration not updated.")
+        except tk.TclError as e:
+            logger.error(f"TclError reading duration values on popup close: {e}. Duration not updated.")
+
+        self._update_or_create_display_label(
+            label_attr_name="strip_duration_display_label",
+            parent_frame=self.duration_field_frame,
+            text_to_display=self._format_display_duration(),
+            icon_button_widget=self.strip_duration_button
+        )
+        popup.destroy()
 
     def _open_description_popup(self):
         popup = bs.Toplevel(master=self.root, title="Set Description") # Explicitly set master
@@ -946,7 +1014,7 @@ class TaskManagerApp:
         text_area_frame = bs.Frame(popup, padding=10)
         text_area_frame.pack(fill=tk.BOTH, expand=True)
 
-        desc_text = tk.Text(text_area_frame, height=10, width=40, wrap=tk.WORD)
+        desc_text = tk.Text(text_area_frame, height=6, width=40, wrap=tk.WORD) # Reduced height from 10 to 6
         # Add a scrollbar
         scrollbar = ttk.Scrollbar(text_area_frame, orient=tk.VERTICAL, command=desc_text.yview)
         desc_text.configure(yscrollcommand=scrollbar.set)
@@ -973,14 +1041,16 @@ class TaskManagerApp:
         def on_cancel():
             popup.destroy()
 
-        button_frame = bs.Frame(popup, padding=10)
-        button_frame.pack(fill=tk.X, side=tk.BOTTOM)
+        # Remove Save/Cancel buttons
+        # button_frame = bs.Frame(popup, padding=10)
+        # button_frame.pack(fill=tk.X, side=tk.BOTTOM)
+        # save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success-pill")
+        # save_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
+        # cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary-pill")
+        # cancel_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
 
-        save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success-pill") # Pill
-        save_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
-
-        cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary-pill") # Pill
-        cancel_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
+        # Bind window close ('X') to save action
+        popup.protocol("WM_DELETE_WINDOW", lambda p=popup, dt=desc_text: self._on_description_popup_close(p, dt))
 
         popup.update_idletasks()
         # Recalculate position after content might have changed size
@@ -993,6 +1063,18 @@ class TaskManagerApp:
         x = root_x + (root_width // 2) - (popup_width // 2)
         y = root_y + (root_height // 2) - (popup_height // 2)
         popup.geometry(f'{popup_width}x{popup_height}+{x}+{y}') # Ensure size is also set
+
+    def _on_description_popup_close(self, popup, desc_text_widget):
+        """Handles saving the description when the popup is closed."""
+        self.strip_description_value = desc_text_widget.get("1.0", tk.END).strip()
+        logger.info(f"Description popup closed. Description set (length: {len(self.strip_description_value)})")
+        self._update_or_create_display_label(
+            label_attr_name="strip_description_display_label",
+            parent_frame=self.desc_field_frame,
+            text_to_display=self._format_display_description(),
+            icon_button_widget=self.strip_description_button
+        )
+        popup.destroy()
 
     def _open_priority_popup(self):
         popup = bs.Toplevel(master=self.root, title="Set Priority") # Explicitly set master
@@ -1017,7 +1099,7 @@ class TaskManagerApp:
         combo.set(current_priority_display if current_priority_display in priority_values else "Medium")
         combo.pack(pady=5, padx=20, fill=tk.X)
 
-        def on_save():
+        def on_priority_select(event=None):
             self.strip_priority_value = combo.get() # This is the display string e.g. "Medium"
             logger.info(f"Priority set to: {self.strip_priority_value}")
             self._update_or_create_display_label(
@@ -1028,17 +1110,9 @@ class TaskManagerApp:
             )
             popup.destroy()
 
-        def on_cancel():
-            popup.destroy()
+        combo.bind("<<ComboboxSelected>>", on_priority_select)
 
-        button_frame = bs.Frame(popup)
-        button_frame.pack(pady=10)
-
-        save_btn = bs.Button(button_frame, text="Save", command=on_save, bootstyle="success-pill") # Pill
-        save_btn.pack(side=tk.LEFT, padx=5)
-
-        cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel, bootstyle="secondary-pill") # Pill
-        cancel_btn.pack(side=tk.LEFT, padx=5)
+        # No Save/Cancel buttons needed anymore
 
         popup.update_idletasks()
         root_x = self.root.winfo_x()
@@ -1059,32 +1133,39 @@ class TaskManagerApp:
             popup.grab_set()
             popup.geometry("300x150")
 
-            label = bs.Label(popup, text="Enter task category:")
+            label = bs.Label(popup, text="Select or enter task category:") # Updated label text
             label.pack(pady=10)
 
-            category_entry = ttk.Entry(popup, width=30)
-            category_entry.insert(0, self.strip_category_value if self.strip_category_value else "")
-            category_entry.pack(pady=5, padx=20, fill=tk.X)
-            category_entry.focus_set()
+            conn = database_manager.create_connection()
+            unique_categories = []
+            if conn:
+                try:
+                    unique_categories = database_manager.get_unique_categories(conn)
+                finally:
+                    conn.close()
 
-            # Define the save action handler
-            def on_save_popup_action(event=None):
-                self._save_category_popup(category_entry, popup)
+            category_combobox = ttk.Combobox(popup, width=28, values=unique_categories) # width adjusted for typical combobox arrow
+            current_category = self.strip_category_value if self.strip_category_value else ""
+            category_combobox.set(current_category) # Set current value
+            category_combobox.pack(pady=5, padx=20, fill=tk.X)
+            category_combobox.focus_set()
 
-            category_entry.bind("<Return>", on_save_popup_action)
+            # Define the action handler for close/return
+            def handle_category_input_confirm(event=None):
+                self._on_category_popup_close(popup, category_combobox) # Pass combobox instead of entry
 
-            # Define cancel action
-            def on_cancel_popup_action():
-                popup.destroy()
+            # For an editable combobox, <Return> on its entry part should trigger confirm
+            category_combobox.bind("<Return>", handle_category_input_confirm)
+            # Also, selecting from dropdown and then closing window, or just closing window
+            popup.protocol("WM_DELETE_WINDOW", handle_category_input_confirm)
 
-            button_frame = bs.Frame(popup)
-            button_frame.pack(pady=10)
-
-            save_btn = bs.Button(button_frame, text="Save", command=on_save_popup_action, bootstyle="success-pill") # Pill
-            save_btn.pack(side=tk.LEFT, padx=5)
-
-            cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel_popup_action, bootstyle="secondary-pill") # Pill
-            cancel_btn.pack(side=tk.LEFT, padx=5)
+            # Remove Save/Cancel buttons
+            # button_frame = bs.Frame(popup)
+            # button_frame.pack(pady=10)
+            # save_btn = bs.Button(button_frame, text="Save", command=on_save_popup_action, bootstyle="success-pill")
+            # save_btn.pack(side=tk.LEFT, padx=5)
+            # cancel_btn = bs.Button(button_frame, text="Cancel", command=on_cancel_popup_action, bootstyle="secondary-pill")
+            # cancel_btn.pack(side=tk.LEFT, padx=5)
 
             popup.update_idletasks()
             root_x = self.root.winfo_x()
@@ -1104,25 +1185,25 @@ class TaskManagerApp:
                 parent_for_error = self.root if self.root and hasattr(self.root, 'winfo_exists') and self.root.winfo_exists() else None
                 messagebox.showerror("Popup Error", f"Could not open category popup: {e}", parent=parent_for_error)
 
-    def _save_category_popup(self, entry_widget, popup_window):
-        """Helper method to save category from popup."""
+    def _on_category_popup_close(self, popup_window, combobox_widget): # Changed entry_widget to combobox_widget
+        """Handles saving the category when the popup is closed or Enter is pressed."""
         try:
-            self.strip_category_value = entry_widget.get().strip()
-            logger.info(f"Category set to: {self.strip_category_value}")
+            self.strip_category_value = combobox_widget.get().strip() # Get value from combobox
+            logger.info(f"Category popup closed/confirmed. Category set to: {self.strip_category_value}")
             self._update_or_create_display_label(
                 label_attr_name="strip_category_display_label",
                 parent_frame=self.category_field_frame,
                 text_to_display=self._format_display_category(),
                 icon_button_widget=self.strip_category_button
             )
-        except Exception as e:
-            logger.error(f"Error getting value in _save_category_popup: {e}", exc_info=True)
-            if hasattr(popup_window, 'winfo_exists') and popup_window.winfo_exists():
-                 if not self.headless_mode:
-                      messagebox.showerror("Save Error", f"Could not retrieve category value: {e}", parent=popup_window)
-                 return
+        except Exception as e: # Broad exception for issues like widget not existing if called during odd timing
+            logger.error(f"Error setting category value on popup close: {e}", exc_info=True)
+            # Avoid showing messagebox if popup_window itself is problematic
+            if hasattr(popup_window, 'winfo_exists') and popup_window.winfo_exists() and not self.headless_mode:
+                 messagebox.showerror("Save Error", f"Could not retrieve category value: {e}", parent=popup_window)
         finally:
-            if hasattr(popup_window, 'destroy'):
+            # Ensure popup is destroyed only once and if it exists
+            if hasattr(popup_window, 'winfo_exists') and popup_window.winfo_exists():
                 popup_window.destroy()
 
 
@@ -1378,6 +1459,7 @@ class TaskManagerApp:
                  self.strip_add_button.config(text="+")
             self.refresh_task_list()
             self.request_reschedule_reminders()
+            self._refresh_category_sidebar_list() # Refresh categories in sidebar
 
         except Exception as e:
             error_message = f"An unexpected error occurred: {e}"
@@ -1542,7 +1624,11 @@ class TaskManagerApp:
                 missed = database_manager.get_missed_tasks(conn)
                 skipped = database_manager.get_skipped_tasks_db(conn)
                 tasks = missed + skipped
-                tasks.sort(key=lambda t: t.due_date if t.due_date else '', reverse=True)
+                # Sort combined list by due_date, handling potential None values
+                tasks.sort(key=lambda t: (t.due_date is None, t.due_date), reverse=True)
+            elif self.current_task_view == "category_filter" and self.active_category_filter:
+                tasks = database_manager.get_tasks_by_category(conn, self.active_category_filter)
+                logger.info(f"Displaying tasks for category: {self.active_category_filter}")
             elif self.current_task_view == "reschedule_section":
                 tasks = database_manager.get_all_tasks(conn)
                 logger.info("Displaying all tasks for 'Reschedule Section' (placeholder).")
@@ -1704,8 +1790,9 @@ class TaskManagerApp:
 
         # Now, configure text and foreground based on text_to_display
         if not text_to_display: # Empty text means make label invisible by matching fg to bg
-            label_widget.config(text=" ", foreground=hidden_fg_color) # Use a space to maintain height
-            logger.debug(f"Made label {label_attr_name} invisible (text: ' ', fg: {hidden_fg_color}).")
+            placeholder_text = self.label_placeholders.get(label_attr_name, " ") # Get specific placeholder, fallback to a space
+            label_widget.config(text=placeholder_text, foreground=hidden_fg_color)
+            logger.debug(f"Made label {label_attr_name} invisible (text: '{placeholder_text}', fg: {hidden_fg_color}).")
         else: # Text is not empty, so set text and make it visible
             label_widget.config(text=text_to_display, foreground=visible_fg_color)
             logger.debug(f"Made label {label_attr_name} visible (text: '{text_to_display}', fg: {visible_fg_color}).")
@@ -1732,11 +1819,64 @@ class TaskManagerApp:
             if conn: conn.close()
         if not self.headless_mode and hasattr(self, 'refresh_task_list'):
             self.refresh_task_list()
+        if hasattr(self, '_refresh_category_sidebar_list'): # Refresh category list if a task affecting categories was changed
+            self._refresh_category_sidebar_list()
+
+
+    def _refresh_category_sidebar_list(self):
+        if self.headless_mode or not hasattr(self, 'category_buttons_frame') or not self.category_buttons_frame.winfo_exists():
+            logger.debug("_refresh_category_sidebar_list: Skipping, headless or category_buttons_frame not ready.")
+            return
+
+        # Clear existing category buttons
+        for widget in self.category_buttons_frame.winfo_children():
+            widget.destroy()
+
+        conn = None
+        try:
+            conn = database_manager.create_connection()
+            if conn:
+                unique_categories = database_manager.get_unique_categories(conn)
+                logger.info(f"Refreshing category sidebar with {len(unique_categories)} categories.")
+                if not unique_categories:
+                    # Optional: Display a message if no categories exist
+                    # no_cat_label = bs.Label(self.category_buttons_frame, text="(No categories yet)", bootstyle="inverse-dark secondary")
+                    # no_cat_label.pack(pady=5)
+                    pass
+                else:
+                    for category_name in unique_categories:
+                        cat_button = bs.Button(
+                            self.category_buttons_frame,
+                            text=category_name,
+                            bootstyle="outline-light-pill", # Match other side panel buttons
+                            command=lambda cat=category_name: self._filter_by_category(cat)
+                        )
+                        cat_button.pack(fill=tk.X, pady=(2,2), padx=0) # Smaller pady for denser list
+            else:
+                logger.error("Cannot refresh category sidebar: DB connection failed.")
+        except Exception as e:
+            logger.error(f"Error refreshing category sidebar list: {e}", exc_info=True)
+        finally:
+            if conn:
+                conn.close()
 
     def _handle_menu_selection(self, view_name):
         self.current_task_view = view_name
         logger.info(f"Switched task view to: {self.current_task_view}")
+        self.active_category_filter = None # Clear category filter when a main view is selected
         self.refresh_task_list()
+
+    def _filter_by_category(self, category_name: str):
+        """Sets the view to filter by a specific category and refreshes the task list."""
+        logger.info(f"Filtering tasks by category: {category_name}")
+        self.current_task_view = "category_filter"
+        self.active_category_filter = category_name
+        self.refresh_task_list()
+        # Optionally, close the sidebar if it's open after selecting a category filter
+        if hasattr(self, 'side_panel_frame') and self.side_panel_frame.winfo_ismapped():
+            if hasattr(self, '_toggle_sidebar_visibility'):
+                self._toggle_sidebar_visibility()
+
 
     def handle_card_selected(self, task_id, card_instance):
         logger.info(f"Card selected: Task ID {task_id}")
