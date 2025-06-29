@@ -19,7 +19,7 @@ class ReminderPopupUI(bs.Toplevel):
         self._drag_offset_y = 0 # For dragging
 
         self.width = 380
-        self.initial_height = 90  # Further Adjusted
+        self.initial_height = 130  # Further Adjusted
         self.expanded_height = 215 # Further Adjusted
 
         self.remaining_work_seconds = 0
@@ -58,12 +58,12 @@ class ReminderPopupUI(bs.Toplevel):
             logger.error(f"CRITICAL: Unexpected error initiating TTS from ReminderPopupUI: {e}", exc_info=True)
 
     def _setup_ui(self):
-        main_frame = bs.Frame(self, padding=(10,3,10,3)) # Adjusted padding
+        main_frame = bs.Frame(self, padding=(10, 5, 10, 5)) # Adjusted padding
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # Top content frame for title and duration/countdown
         top_content_frame = bs.Frame(main_frame)
-        top_content_frame.pack(fill=tk.X, pady=(0, 2)) # Adjusted pady
+        top_content_frame.pack(fill=tk.X, pady=(0, 5)) # Adjusted pady
 
         # Task Title Label (in top_content_frame, packed left)
         title_label = bs.Label(top_content_frame, text=self.task.title if self.task else "No Title",
@@ -113,7 +113,7 @@ class ReminderPopupUI(bs.Toplevel):
 
         # Button Frame (Store as self.button_frame_ref for toggle_expand_popup)
         self.button_frame_ref = bs.Frame(main_frame)
-        self.button_frame_ref.pack(fill=tk.X, side=tk.BOTTOM, pady=(3,2))
+        self.button_frame_ref.pack(fill=tk.X, side=tk.BOTTOM, pady=(5, 5))
         # self.button_frame_ref.configure(bootstyle="danger") # Reverted debugging style
 
         self.expand_button = bs.Button(self.button_frame_ref, text="▼", command=self.toggle_expand_popup, style="info.Round.TButton") # Removed width
@@ -149,10 +149,21 @@ class ReminderPopupUI(bs.Toplevel):
 
             self.remaining_work_seconds -= 1
             self.after_id = self.after(1000, self._update_countdown)
-        elif hasattr(self, 'countdown_label') and self.countdown_label.winfo_exists():
-            self.countdown_label.config(text="Time's up!")
-            logger.info(f"Work duration timer for task ID: {self.task.id if self.task else 'N/A'} has finished. Auto-triggering completion.")
-            self.complete_task()
+        else: # remaining_work_seconds is 0 or less
+            if hasattr(self, 'countdown_label') and self.countdown_label.winfo_exists():
+                self.countdown_label.config(text="Time's up!")
+            logger.info(f"Work duration timer for task ID: {self.task.id if self.task else 'N/A'} has finished.")
+            self._disable_action_buttons()
+            # Schedule the popup to auto-complete and close after a delay.
+            self.after_id = self.after(7000, self.complete_task) # Display "Time's up!" for 7 seconds
+
+    def _disable_action_buttons(self):
+        if hasattr(self, 'complete_button'):
+            self.complete_button.config(state=tk.DISABLED)
+        if hasattr(self, 'reschedule_button'):
+            self.reschedule_button.config(state=tk.DISABLED)
+        if hasattr(self, 'skip_button'):
+            self.skip_button.config(state=tk.DISABLED)
 
     def reschedule_task(self):
         if self.after_id:
