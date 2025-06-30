@@ -147,7 +147,7 @@ class TaskManagerApp:
 
         # Menu toggle button
         self.menu_toggle_button = bs.Button(self.root, text="☰", command=self._toggle_sidebar_visibility, bootstyle="primary-outline")
-        self.menu_toggle_button.grid(row=0, column=0, sticky="nw", padx=5, pady=5)
+        self.menu_toggle_button.grid(row=0, column=0, sticky="nw", padx=5, pady=(15, 5)) # Increased top padding
 
 
         self.side_panel_frame = bs.Frame(self.root, padding=(10, 10), bootstyle="dark")
@@ -1872,10 +1872,10 @@ class TaskManagerApp:
         self.current_task_view = "category_filter"
         self.active_category_filter = category_name
         self.refresh_task_list()
-        # Optionally, close the sidebar if it's open after selecting a category filter
-        if hasattr(self, 'side_panel_frame') and self.side_panel_frame.winfo_ismapped():
-            if hasattr(self, '_toggle_sidebar_visibility'):
-                self._toggle_sidebar_visibility()
+        # Removed the explicit call to _toggle_sidebar_visibility to keep sidebar open.
+        # if hasattr(self, 'side_panel_frame') and self.side_panel_frame.winfo_ismapped():
+        #     if hasattr(self, '_toggle_sidebar_visibility'):
+        #         self._toggle_sidebar_visibility()
 
 
     def handle_card_selected(self, task_id, card_instance):
