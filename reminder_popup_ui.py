@@ -496,11 +496,32 @@ class ReminderPopupUI(bs.Toplevel):
         ToolTip(self.skip_button, text="Skip Reminder")
 
         self.reschedule_button = bs.Button(self.button_frame_ref,
-                                       text="🔄",
-                                       command=self.reschedule_task,
+                                       text="🔄", # Standard Reschedule Icon
+                                       command=self._trigger_initiate_reschedule, # New method
                                        bootstyle="secondary")
         self.reschedule_button.pack(side=tk.RIGHT, padx=2)
-        ToolTip(self.reschedule_button, text="Reschedule (+15m)")
+        ToolTip(self.reschedule_button, text="Reschedule Task") # Updated tooltip
+
+    def _trigger_initiate_reschedule(self):
+        """Called when the new Reschedule button on the popup is clicked."""
+        self._cancel_nag_tts() # Cancel any pending nags
+        task_id_to_reschedule = self.task.id if self.task else None
+        logger.info(f"ReminderPopupUI: 'Reschedule' button clicked for task ID: {task_id_to_reschedule}")
+        if self.app_callbacks and 'initiate_reschedule' in self.app_callbacks:
+            try:
+                # This callback will handle confirmation and navigation in TaskManagerApp
+                self.app_callbacks['initiate_reschedule'](task_id_to_reschedule)
+                # The TaskManagerApp's initiate_reschedule should handle closing this popup
+                # or this popup should close itself after calling the callback if that's the desired flow.
+                # For now, let TaskManagerApp handle closing if it navigates away.
+                # If TaskManagerApp doesn't close it, we might need: self._cleanup_and_destroy()
+            except Exception as e:
+                logger.error(f"ReminderPopupUI: Error calling 'initiate_reschedule' callback: {e}", exc_info=True)
+        else:
+            logger.warning(f"ReminderPopupUI: 'initiate_reschedule' callback not found for task ID: {task_id_to_reschedule}")
+            # Fallback or error message if callback is missing
+            # self._cleanup_and_destroy() # Still close if callback is missing
+
 
     def _update_countdown(self):
         if self.remaining_work_seconds > 0:

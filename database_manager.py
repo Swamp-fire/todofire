@@ -301,6 +301,22 @@ def get_unique_categories(conn):
         logger.error(f"Error getting unique categories: {e}", exc_info=True)
     return categories
 
+def get_pending_tasks_for_reschedule(conn):
+    """Fetches all 'Pending' tasks, ordered by due date (NULLS LAST) and then creation_date."""
+    logger.debug("Fetching pending tasks for reschedule view from database.")
+    cursor = conn.cursor()
+    tasks = []
+    try:
+        # Orders by due_date, putting tasks without a due_date at the end.
+        # Secondary sort by creation_date for consistent ordering among tasks with same/no due_date.
+        cursor.execute("SELECT * FROM Tasks WHERE status = 'Pending' ORDER BY due_date ASC NULLS LAST, creation_date DESC")
+        rows = cursor.fetchall()
+        tasks = _tasks_from_rows(rows)
+        logger.info(f"Fetched {len(tasks)} pending tasks for reschedule view.")
+    except sqlite3.Error as e:
+        logger.error(f"Error getting pending tasks for reschedule: {e}", exc_info=True)
+    return tasks
+
 if __name__ == '__main__':
     print("Database Manager Module Direct Test")
     # Test cases for check_time_only_overlap will be added here.

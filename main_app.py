@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import ttkbootstrap as bs
+from ttkbootstrap.tooltip import ToolTip # Added import for ToolTip
 import datetime # Keep this, timedelta will be used as datetime.timedelta
 from datetime import timedelta # Explicitly import timedelta
 import queue
@@ -79,6 +80,12 @@ class TaskManagerApp:
         self.strip_category_display_label = None
         self.strip_label_options = {} # Will be populated in _setup_ui
         self.active_category_filter = None # For storing the category to filter by
+        self.task_id_for_reschedule = None # Stores task ID when initiating reschedule from a reminder
+        # Variables for reschedule view controls
+        self.reschedule_time_var = None
+        self.reschedule_type_var = None
+        self.reschedule_task_checkbox_vars = {} # Stores BooleanVars for reschedule checkboxes
+        self.reschedule_task_checkbox_widgets = {} # Stores Checkbutton widgets for reschedule view
         self.label_placeholders = {
             "strip_repetition_display_label": "        ",  # Approx 8 spaces for "Monthly "
             "strip_due_date_display_label":   "               ", # Approx 15 spaces for "MMM DD, HH:MM"
@@ -113,6 +120,327 @@ class TaskManagerApp:
             logger.error(f"Exception during scheduler initialization: {e}", exc_info=True)
 
         logger.info("TaskManagerApp initialization complete.")
+
+
+    def _build_reschedule_view(self, parent_frame: bs.Frame, originating_task_id: int = None):
+        logger.info(f"Building reschedule view. Originating task ID: {originating_task_id}")
+
+        # Initialize StringVars if not already done (e.g. first time _setup_ui runs them)
+        if self.reschedule_time_var is None:
+            self.reschedule_time_var = tk.StringVar()
+        if self.reschedule_type_var is None:
+            self.reschedule_type_var = tk.StringVar(value="Permanent") # Default to Permanent
+
+        # --- Top Controls Frame ---
+        controls_frame = bs.Frame(parent_frame, padding=(0, 0, 0, 10)) # Add some bottom padding
+        controls_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+
+        time_label = bs.Label(controls_frame, text="Add Time:")
+        time_label.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.reschedule_time_combo = ttk.Combobox(
+            controls_frame,
+            textvariable=self.reschedule_time_var,
+            values=["15 minutes", "25 minutes", "30 minutes"],
+            state="readonly",
+            width=15
+        )
+        self.reschedule_time_combo.pack(side=tk.LEFT, padx=(0, 10))
+
+        type_label = bs.Label(controls_frame, text="Change Type:")
+        type_label.pack(side=tk.LEFT, padx=(0, 5))
+
+        permanent_radio = ttk.Radiobutton(
+            controls_frame,
+            text="Permanent",
+            variable=self.reschedule_type_var,
+            value="Permanent"
+        )
+        permanent_radio.pack(side=tk.LEFT)
+
+        today_radio = ttk.Radiobutton(
+            controls_frame,
+            text="Today Only",
+            variable=self.reschedule_type_var,
+            value="TodayOnly",
+            state=tk.NORMAL # Enabled for Phase 2 (basic handling)
+        )
+        today_radio.pack(side=tk.LEFT, padx=(5, 0))
+        ToolTip(today_radio, text="Reschedule for today only (non-recurring tasks). Recurring tasks will be skipped with this option for now.")
+
+
+        # --- Task List Area ---
+        self.reschedule_task_checkbox_vars.clear()
+        self.reschedule_task_checkbox_widgets.clear()
+
+        # Main frame for the scrollable list area
+        self.reschedule_task_list_outer_frame = bs.Frame(parent_frame) # Renamed from self.reschedule_task_list_frame for clarity
+        self.reschedule_task_list_outer_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        reschedule_canvas = bs.Canvas(self.reschedule_task_list_outer_frame)
+        reschedule_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        reschedule_scrollbar = bs.Scrollbar(self.reschedule_task_list_outer_frame, orient=tk.VERTICAL, command=reschedule_canvas.yview)
+        reschedule_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        reschedule_canvas.configure(yscrollcommand=reschedule_scrollbar.set)
+
+        # Frame inside the canvas that will hold the task rows
+        self.reschedule_list_content_frame = bs.Frame(reschedule_canvas, bootstyle="dark") # Assign to self, initial bootstyle dark
+        reschedule_canvas.create_window((0,0), window=self.reschedule_list_content_frame, anchor="nw", tags="reschedule_content_frame")
+
+        def _configure_reschedule_scroll_region(event):
+            reschedule_canvas.configure(scrollregion=reschedule_canvas.bbox("all"))
+            # Update width of self.reschedule_list_content_frame to match canvas width
+            reschedule_canvas.itemconfig("reschedule_content_frame", width=event.width)
+
+        self.reschedule_list_content_frame.bind("<Configure>", _configure_reschedule_scroll_region)
+        # Bind canvas configure too, for initial width setting if parent_frame is already sized
+        # This helps ensure the self.reschedule_list_content_frame gets an initial sensible width.
+        def _on_reschedule_canvas_configure(event):
+             reschedule_canvas.itemconfig('reschedule_content_frame', width=event.width)
+        reschedule_canvas.bind("<Configure>", _on_reschedule_canvas_configure, add="+")
+
+
+        # Fetch and display tasks
+        conn = None
+        try:
+            conn = database_manager.create_connection()
+            if conn:
+                tasks_to_list = database_manager.get_pending_tasks_for_reschedule(conn) # Use new function
+                if not tasks_to_list:
+                    no_tasks_label = bs.Label(self.reschedule_list_content_frame, text="No pending tasks available to reschedule.") # Updated text
+                    no_tasks_label.pack(pady=10)
+                else:
+                    for task in tasks_to_list:
+                        var = tk.BooleanVar()
+                        self.reschedule_task_checkbox_vars[task.id] = var
+
+                        task_row_frame = bs.Frame(self.reschedule_list_content_frame) # Parent is now self.reschedule_list_content_frame
+
+                        chk_btn = ttk.Checkbutton(task_row_frame, variable=var)
+                        self.reschedule_task_checkbox_widgets[task.id] = chk_btn
+                        chk_btn.pack(side=tk.LEFT)
+
+                        due_display_str = "N/A"
+                        if task.due_date:
+                            try:
+                                due_dt_obj = datetime.datetime.fromisoformat(task.due_date)
+                                due_display_str = due_dt_obj.strftime("%Y-%m-%d %H:%M")
+                            except ValueError:
+                                due_display_str = task.due_date # Show raw if format error
+
+                        priority_str = self.priority_map_display.get(task.priority, "N/A")
+                        category_str = task.category if task.category and task.category.strip() else "N/A"
+
+                        label_text = (f"{task.title} (Due: {due_display_str}, "
+                                      f"Prio: {priority_str}, Cat: {category_str}, Status: {task.status})")
+                        task_label = bs.Label(task_row_frame, text=label_text)
+                        task_label.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+
+                        if task.id == originating_task_id:
+                            var.set(True)
+                            chk_btn.config(state=tk.DISABLED)
+
+                        task_row_frame.pack(fill=tk.X, pady=2, padx=2)
+            else:
+                error_label = bs.Label(content_frame_for_canvas, text="Error: Could not connect to database.", bootstyle="danger")
+                error_label.pack(pady=10)
+        except Exception as e:
+            logger.error(f"Error populating reschedule task list: {e}", exc_info=True)
+            error_info_label = bs.Label(content_frame_for_canvas, text=f"Error loading tasks: {e}", bootstyle="danger")
+            error_info_label.pack(pady=10)
+        finally:
+            if conn:
+                conn.close()
+
+        # Mousewheel binding for the new canvas
+        # Need to ensure this doesn't conflict with main task list mousewheel if both are somehow active
+        # For now, direct binding. Consider if self.task_list_canvas.bind_all needs to be more specific.
+        # This might require a more sophisticated focus-based mousewheel handler like the main one.
+        # For simplicity in this step, a direct bind:
+        def _on_reschedule_mousewheel(event):
+            if event.delta: # For Windows and macOS (wheel scroll)
+                reschedule_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            elif event.num == 4: # For Linux (scroll up)
+                reschedule_canvas.yview_scroll(-1, "units")
+            elif event.num == 5: # For Linux (scroll down)
+                reschedule_canvas.yview_scroll(1, "units")
+        reschedule_canvas.bind_all("<MouseWheel>", _on_reschedule_mousewheel) # Careful with bind_all
+        # To be safer, bind to the canvas itself and its children if focus is within them.
+        # For now, this is a simpler approach. A more robust solution might be needed if conflicts arise.
+
+        # Bindings for top controls to update list state
+        self.reschedule_time_combo.bind("<<ComboboxSelected>>", self._update_reschedule_list_state)
+        # For radio buttons, command is usually simpler than binding to variable change
+        permanent_radio.config(command=self._update_reschedule_list_state)
+        today_radio.config(command=self._update_reschedule_list_state) # Though it's disabled, good practice
+
+        # Set initial state of the task list (likely disabled)
+        self._update_reschedule_list_state()
+
+
+        # --- Action Buttons Frame ---
+        action_buttons_frame = bs.Frame(parent_frame)
+        action_buttons_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=10)
+
+        self.save_reschedule_button = bs.Button(
+            action_buttons_frame,
+            text="Save Reschedule",
+            command=self._save_rescheduled_tasks,
+            bootstyle="success-pill"
+        )
+        self.save_reschedule_button.pack(side=tk.RIGHT, padx=(5,0)) # Save on the right
+
+        self.cancel_reschedule_button = bs.Button(
+            action_buttons_frame,
+            text="Cancel",
+            command=self._cancel_reschedule,
+            bootstyle="secondary-pill"
+        )
+        self.cancel_reschedule_button.pack(side=tk.RIGHT) # Cancel to its left
+
+
+    def _save_rescheduled_tasks(self):
+        logger.info("'_save_rescheduled_tasks' called.")
+        time_to_add_str = self.reschedule_time_var.get()
+        reschedule_type = self.reschedule_type_var.get()
+
+        if not time_to_add_str:
+            messagebox.showwarning("Missing Information", "Please select how much time to add.", parent=self.root)
+            return
+        if not reschedule_type: # Should always have a value due to default
+            messagebox.showwarning("Missing Information", "Please select the type of change (Permanent/Today Only).", parent=self.root)
+            return
+
+        logger.info(f"Time to add: {time_to_add_str}, Type: {reschedule_type}")
+
+        minutes_to_add = 0
+        if time_to_add_str == "15 minutes":
+            minutes_to_add = 15
+        elif time_to_add_str == "25 minutes":
+            minutes_to_add = 25
+        elif time_to_add_str == "30 minutes":
+            minutes_to_add = 30
+        else: # Should not happen due to readonly combobox
+            messagebox.showerror("Error", "Invalid time selection.", parent=self.root)
+            return
+
+        updated_count = 0
+        conn = None
+        try:
+            conn = database_manager.create_connection()
+            if not conn:
+                messagebox.showerror("Database Error", "Could not connect to database to save reschedule.", parent=self.root)
+                return
+
+            skipped_recurring_tasks_titles = []
+
+            for task_id, var in self.reschedule_task_checkbox_vars.items():
+                if var.get() is True: # If checkbox is selected
+                    task_to_update = database_manager.get_task(conn, task_id)
+                    if task_to_update:
+                        if reschedule_type == "TodayOnly" and task_to_update.repetition and task_to_update.repetition != 'None':
+                            skipped_recurring_tasks_titles.append(task_to_update.title)
+                            logger.warning(f"'Today Only' reschedule selected for recurring task '{task_to_update.title}' (ID: {task_id}). This specific instance will not be changed. Reschedule permanently if needed.")
+                            continue # Skip to the next task
+
+                        if task_to_update.due_date:
+                            try:
+                                current_due_dt = datetime.datetime.fromisoformat(task_to_update.due_date)
+                                new_due_dt = current_due_dt + timedelta(minutes=minutes_to_add)
+                                task_to_update.due_date = new_due_dt.isoformat()
+
+                                if database_manager.update_task(conn, task_to_update):
+                                    updated_count += 1
+                                    logger.info(f"Rescheduled task ID {task_id} ('{task_to_update.title}') to {task_to_update.due_date} (Type: {reschedule_type})")
+                                else:
+                                    logger.error(f"Failed to update task ID {task_id} in database.")
+                            except ValueError:
+                                logger.error(f"Task ID {task_id} has invalid due_date format: {task_to_update.due_date}. Skipping reschedule for this task.")
+                        else:
+                            logger.warning(f"Task ID {task_id} ('{task_to_update.title}') has no due date. Cannot reschedule. Skipping.")
+                    else:
+                        logger.warning(f"Task ID {task_id} not found in database for reschedule. Skipping.")
+
+            success_message = ""
+            if updated_count > 0:
+                success_message += f"{updated_count} task(s) rescheduled successfully."
+
+            if skipped_recurring_tasks_titles:
+                skipped_tasks_str = ", ".join(skipped_recurring_tasks_titles)
+                if success_message: success_message += "\n\n" # Add separator if there were other successes
+                success_message += (f"Note: {len(skipped_recurring_tasks_titles)} recurring task(s) "
+                                    f"({skipped_tasks_str}) were not rescheduled because 'Today Only' "
+                                    "for recurring tasks is not yet fully supported. "
+                                    "Please use 'Permanent' change for them if needed.")
+
+            if success_message: # If any message to show (either updates or skips)
+                if updated_count > 0 :
+                     messagebox.showinfo("Reschedule Complete", success_message, parent=self.root)
+                else: # Only skipped tasks message
+                     messagebox.showwarning("Reschedule Information", success_message, parent=self.root)
+
+                if updated_count > 0: # Only refresh if actual changes were made
+                    self._refresh_category_sidebar_list()
+                    self.request_reschedule_reminders()
+            else: # No tasks selected or no changes made at all
+                messagebox.showinfo("No Changes", "No tasks were selected or no changes were applicable.", parent=self.root)
+
+        except Exception as e:
+            logger.error(f"Error during save rescheduled tasks: {e}", exc_info=True)
+            messagebox.showerror("Error", f"An unexpected error occurred while saving: {e}", parent=self.root)
+        finally:
+            if conn:
+                conn.close()
+
+        self._cancel_reschedule() # Navigate away after save attempt
+
+
+    def _cancel_reschedule(self):
+        logger.info("Reschedule cancelled. Returning to 'All Tasks' view.")
+        self.current_task_view = "all"
+        self.task_id_for_reschedule = None # Clear originating task ID
+        self.refresh_task_list()
+
+    def _update_reschedule_list_state(self, event=None): # event=None for direct calls
+        """Enables or disables task checkboxes in reschedule view based on top control selections."""
+        time_selected = self.reschedule_time_var.get() != ""
+        selected_reschedule_type = self.reschedule_type_var.get()
+        type_is_permanent = selected_reschedule_type == "Permanent"
+        type_is_today_only = selected_reschedule_type == "TodayOnly"
+
+        can_enable_list = time_selected and (type_is_permanent or type_is_today_only)
+        new_state = tk.NORMAL if can_enable_list else tk.DISABLED
+
+        logger.debug(f"Updating reschedule list state. Time selected: {time_selected}, Type selected: {selected_reschedule_type}. New widget state: {new_state}")
+
+        for task_id, chk_button_widget in self.reschedule_task_checkbox_widgets.items():
+            if chk_button_widget.winfo_exists(): # Ensure widget still exists
+                # The originating task's checkbox should remain selected but disabled,
+                # regardless of the top controls, as it's the primary subject.
+                # All other checkboxes follow the new_state.
+                if task_id == getattr(self, 'task_id_for_reschedule', None) and self.task_id_for_reschedule is not None:
+                    # This checkbutton was already set to DISABLED and its var to True if it's the originating task.
+                    # We don't want to re-enable it here.
+                    # So, if it's the originating task, we don't change its state based on top controls.
+                    # It was set to DISABLED during list population.
+                    pass
+                else:
+                    chk_button_widget.config(state=new_state)
+
+        # Also enable/disable the Save Reschedule button based on list enablement
+        if hasattr(self, 'save_reschedule_button') and self.save_reschedule_button.winfo_exists():
+            self.save_reschedule_button.config(state=new_state)
+
+        # Update background style of the content frame for visual cue
+        if hasattr(self, 'reschedule_list_content_frame') and self.reschedule_list_content_frame.winfo_exists():
+            if new_state == tk.DISABLED:
+                self.reschedule_list_content_frame.config(bootstyle="secondary") # Subdued style
+                logger.debug("Set reschedule_list_content_frame bootstyle to secondary (disabled look)")
+            else: # tk.NORMAL
+                self.reschedule_list_content_frame.config(bootstyle="dark") # Active style
+                logger.debug("Set reschedule_list_content_frame bootstyle to dark (active look)")
+
 
     def _toggle_sidebar_visibility(self):
         if not hasattr(self, 'side_panel_frame') or not self.side_panel_frame:
@@ -210,6 +538,19 @@ class TaskManagerApp:
 
         self.category_buttons_frame = bs.Frame(self.side_panel_frame, bootstyle="dark") # Match parent panel style
         self.category_buttons_frame.pack(fill=tk.X, expand=False, padx=5, pady=0) # Fill X, but don't expand vertically unless content pushes
+
+        # --- Reschedule Tasks Button in Sidebar ---
+        reschedule_tasks_btn = bs.Button(
+            self.side_panel_frame,
+            text="Reschedule Tasks",
+            command=lambda: (
+                setattr(self, 'current_task_view', "reschedule_tasks"),
+                setattr(self, 'task_id_for_reschedule', None), # Clear originating task ID
+                self.refresh_task_list()
+            ),
+            bootstyle=side_button_style # Use the same style as other sidebar buttons
+        )
+        reschedule_tasks_btn.pack(fill=tk.X, pady=5, padx=5, side=tk.BOTTOM) # Pack at bottom of sidebar
 
         # Ensure side panel is hidden by default after setup
         self.side_panel_frame.grid_remove()
@@ -1629,7 +1970,16 @@ class TaskManagerApp:
             elif self.current_task_view == "category_filter" and self.active_category_filter:
                 tasks = database_manager.get_tasks_by_category(conn, self.active_category_filter)
                 logger.info(f"Displaying tasks for category: {self.active_category_filter}")
-            elif self.current_task_view == "reschedule_section":
+            elif self.current_task_view == "reschedule_tasks":
+                logger.info("Switching to Reschedule Tasks view.")
+                # Clear cards_frame and build the reschedule UI instead
+                for widget in self.cards_frame.winfo_children():
+                    widget.destroy()
+                self._build_reschedule_view(self.cards_frame, getattr(self, 'task_id_for_reschedule', None))
+                # No 'tasks' list needed from DB for this branch as UI is custom
+                if conn: conn.close() # Close connection as we are done for this view type
+                return # IMPORTANT: Return here to skip card population logic
+            elif self.current_task_view == "reschedule_section": # This was an old placeholder, might be same as "reschedule_tasks" now
                 tasks = database_manager.get_all_tasks(conn)
                 logger.info("Displaying all tasks for 'Reschedule Section' (placeholder).")
             else:
@@ -1738,8 +2088,16 @@ class TaskManagerApp:
                         self.active_popups[task_id].lift()
                         self.active_popups[task_id].focus_force()
                         continue
+
                     logger.info(f"Attempting to create ReminderPopupUI for task ID {task_id}. Active popups: {list(self.active_popups.keys())}")
-                    app_callbacks = { 'reschedule': self.handle_reschedule_task, 'complete': self.handle_complete_task, 'remove_from_active': self._remove_popup_from_active, 'request_wrap_position': self._calculate_next_wrap_position, 'skip_task': self.handle_skip_task, }
+                    app_callbacks = {
+                        'reschedule': self.handle_reschedule_task, # This is the old +15min reschedule
+                        'initiate_reschedule': self.initiate_reschedule, # New callback for reschedule view
+                        'complete': self.handle_complete_task,
+                        'remove_from_active': self._remove_popup_from_active,
+                        'request_wrap_position': self._calculate_next_wrap_position,
+                        'skip_task': self.handle_skip_task,
+                    }
                     target_x = self.popup_next_x
                     target_y = self.popup_next_y
                     logger.info(f"POPUP_STACKING: New popup (Task ID: {task_id}) target: X={target_x}, Y={target_y}")
@@ -1760,10 +2118,56 @@ class TaskManagerApp:
                     popup = ReminderPopupUI(self.root, task_details, app_callbacks, target_x=target_x, target_y=target_y)
                     self.active_popups[task_id] = popup
                     logger.info(f"ReminderPopupUI created for task ID {task_id} at X={target_x}, Y={target_y} and added to active_popups.")
+
+                    # TTS prompt after popup is shown
+                    if tts_manager and not tts_manager.is_muted:
+                        tts_message = f"Sir, {task_details.title if task_details.title else 'this task'} has been finished. Please press complete task button or click reschedule button to add extra time."
+                        logger.info(f"TTS for Reschedule Prompt: {tts_message}")
+                        tts_manager.speak(tts_message)
+
         except queue.Empty: pass
         except Exception as e: logger.error(f"Error processing reminder queue: {e}", exc_info=True)
         if not self.headless_mode and self.root and self.root.winfo_exists():
              self.root.after(250, self._check_reminder_queue)
+
+    def initiate_reschedule(self, task_id):
+        logger.info(f"Initiating reschedule flow for task ID: {task_id}")
+        self.task_id_for_reschedule = task_id
+
+        # Close the reminder popup that triggered this
+        if task_id in self.active_popups:
+            popup_to_close = self.active_popups[task_id]
+            if popup_to_close and popup_to_close.winfo_exists():
+                logger.debug(f"Closing reminder popup for task ID {task_id} before showing reschedule confirmation.")
+                # popup_to_close._cleanup_and_destroy() # This might be too immediate, let messagebox show first
+                # For now, let's just withdraw it. If user cancels reschedule, we might need to re-show it or handle differently.
+                # A cleaner way is for the popup to call its own close after invoking the callback.
+                # For now, let's assume the callback in ReminderPopupUI will handle its own closing after this call.
+                # If not, we'll call _cleanup_and_destroy() on it after confirmation.
+                pass # Assuming popup handles its own closure or is handled after messagebox
+
+        confirmed = messagebox.askyesno(
+            "Confirm Reschedule",
+            "Do you want to proceed to reschedule this task?",
+            parent=self.root
+        )
+
+        if confirmed:
+            logger.info(f"User confirmed reschedule for task ID: {task_id}. Switching to reschedule view.")
+            # Ensure the triggering popup is definitely closed now
+            if task_id in self.active_popups:
+                popup_to_close = self.active_popups.get(task_id) # Use get to avoid KeyError if already removed
+                if popup_to_close and popup_to_close.winfo_exists():
+                    popup_to_close._cleanup_and_destroy() # This will also call remove_from_active
+
+            self.current_task_view = "reschedule_tasks"
+            self.refresh_task_list()
+        else:
+            logger.info(f"User cancelled reschedule for task ID: {task_id}.")
+            self.task_id_for_reschedule = None # Clear it if cancelled
+            # If the popup wasn't closed by itself, it might still be there.
+            # This part needs careful handling of the popup lifecycle.
+            # For now, if user cancels, the original popup might remain or might have been closed by its own logic.
 
     def _update_or_create_display_label(self, label_attr_name: str, parent_frame: bs.Frame, text_to_display: str, icon_button_widget: bs.Button):
         """
